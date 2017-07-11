@@ -1,0 +1,93 @@
+<idea-plugin version="2">
+	<extensions defaultExtensionNs="org.eclipse.xtext.idea">
+		<package
+			uri="http://www.myasm.org/assembly/compiler/MyAsm"
+			class="org.myasm.assembly.compiler.myAsm.MyAsmPackage"
+		/>
+		<resourceFactory 
+			type="myasm"
+			class="org.eclipse.xtext.resource.IResourceFactory"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+		/>
+		<resourceServiceProvider
+			uriExtension="myasm"
+			class="org.eclipse.xtext.idea.resource.IResourceIdeaServiceProvider"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+		/>
+
+		<lang.setup
+			language="org.myasm.assembly.compiler.MyAsm"
+			implementationClass="org.myasm.assembly.compiler.idea.MyAsmIdeaSetup"
+		/>
+	</extensions>
+
+	<extensions defaultExtensionNs="com.intellij">
+		<psi.treeChangePreprocessor implementation="org.myasm.assembly.compiler.idea.lang.psi.MyAsmCodeBlockModificationListener"/>
+
+		<fileTypeFactory implementation="org.myasm.assembly.compiler.idea.lang.MyAsmFileTypeFactory"/>
+		<stubElementTypeHolder class="org.myasm.assembly.compiler.idea.lang.MyAsmElementTypeProvider"/>
+		<lang.ast.factory 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="org.eclipse.xtext.idea.lang.BaseXtextASTFactory"
+		/>
+		<lang.parserDefinition 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="org.myasm.assembly.compiler.idea.lang.parser.MyAsmParserDefinition"
+		/>
+		<lang.findUsagesProvider 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="org.eclipse.xtext.idea.findusages.BaseXtextFindUsageProvider"
+		/>
+		<lang.refactoringSupport 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="org.eclipse.xtext.idea.refactoring.BaseXtextRefactoringSupportProvider"
+		/>
+		<lang.namesValidator 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="com.intellij.lang.refactoring.NamesValidator"
+		/>
+		<lang.syntaxHighlighterFactory key="org.myasm.assembly.compiler.MyAsm" implementationClass="org.myasm.assembly.compiler.idea.highlighting.MyAsmSyntaxHighlighterFactory" />
+		<lang.braceMatcher 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="com.intellij.lang.PairedBraceMatcher"
+		/>
+		<annotator 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="org.eclipse.xtext.idea.annotation.IssueAnnotator"
+		/>
+		<completion.contributor language="org.myasm.assembly.compiler.MyAsm" implementationClass="org.myasm.assembly.compiler.idea.completion.MyAsmCompletionContributor"/>
+		<pom.declarationSearcher implementation="org.myasm.assembly.compiler.idea.lang.pom.MyAsmPomDeclarationSearcher"/>
+
+		<lang.psiStructureViewFactory 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="com.intellij.lang.PsiStructureViewFactory"
+		/>
+		<facetType implementation="org.myasm.assembly.compiler.idea.facet.MyAsmFacetType"/>
+      	<lang.documentationProvider 
+      		language="org.myasm.assembly.compiler.MyAsm"
+      		factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+      		implementationClass="org.eclipse.xtext.idea.documentation.IdeaDocumentationProvider"
+      	/>
+		<colorSettingsPage implementation="org.myasm.assembly.compiler.idea.highlighting.MyAsmColorSettingsPage"/>
+		<highlightVisitor implementation="org.myasm.assembly.compiler.idea.highlighting.MyAsmSemanticHighlightVisitor"/>
+
+		<lang.formatter 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="com.intellij.formatting.FormattingModelBuilder"
+		/>
+		<lang.commenter 
+			language="org.myasm.assembly.compiler.MyAsm"
+			factoryClass="org.myasm.assembly.compiler.idea.MyAsmExtensionFactory"
+			implementationClass="com.intellij.lang.CodeDocumentationAwareCommenter"
+		/>
+	</extensions>
+</idea-plugin>

@@ -1,0 +1,4 @@
+include 'AssemblyCompiler'
+include 'AssemblyCompiler.ide'
+include 'AssemblyCompiler.idea'
+include 'AssemblyCompiler.web'

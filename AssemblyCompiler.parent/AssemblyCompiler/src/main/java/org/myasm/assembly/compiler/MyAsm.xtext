@@ -1,0 +1,168 @@
+grammar org.myasm.assembly.compiler.MyAsm hidden(WS, ML_COMMENT, SL_COMMENT)
+
+generate myAsm "http://www.myasm.org/assembly/compiler/MyAsm"
+
+import "http://www.eclipse.org/emf/2002/Ecore" as ecore
+
+Model :
+    program+=CompilationUnit
+;
+
+terminal ID :
+    ( "a".."z"|"A".."Z"|"_"|"$" )
+    ( "a".."z"|"A".."Z"|"_"|"$"|"0".."9"|"\u00C0".."\u00FF" )*
+;
+
+terminal HEXA :
+    ( "0" "x" ( "0".."9" "a".."f" )* )
+;
+
+terminal DECIMAL_DIGITS returns ecore::EInt:
+    ( "0".."9" )+
+;
+
+terminal ML_COMMENT :
+    "/*" -> "*/"
+;
+
+terminal SL_COMMENT :
+    "//" !( "\n"|"\r" )* ( "\r"? "\n" )?
+;
+
+terminal WS  :
+    ( " "|"\t"|"\r"|"\n" )+
+;
+
+terminal ANY_OTHER :
+    .
+;
+
+terminal DOC_COMMENT :
+    "/**"
+;
+
+CompilationUnit:
+    {CompilationUnit} package=(PackageStatement)? imports+=ImportStatement* declarations+=TypeDeclaration*
+;
+
+PackageStatement:
+    "package" name=PackageName ";"
+;
+
+ImportStatement :
+    "import" ( ( package_name=PackageName "." "*" ";" ) | ( class_name=ClassName | interface_name=InterfaceName ) ) ";"
+;
+
+TypeDeclaration:
+    comment=DOC_COMMENT? ( name=ClassDeclaration | name=InterfaceDeclaration ) ";"
+;
+
+ClassDeclaration :
+    modifiers+=Modifier* 'class' class_name=ID
+    ( "extends" extend=ClassName )?
+    ( "implements" implement=InterfaceName ( "," implements+=InterfaceName )* )?
+    "{" fields+=FieldDeclaration* "}"
+;
+
+InterfaceDeclaration :
+    modifiers+=Modifier* "interface" interface_name=ID
+    ( "extends" extend=InterfaceName ( "," extends+=InterfaceName )* )?
+    "{" fields+=FieldDeclaration* "}"
+;
+
+//===============================================
+/* Possible Ambiguity Here */
+
+PackageName :
+    ID PackageNameAuxiliary
+;
+
+PackageNameAuxiliary :
+    ('.' ID)*
+;
+
+ClassName :
+    PackageName
+;
+
+InterfaceName :
+    PackageName
+;
+
+//===============================================
+
+Modifier:
+    "public"
+    | "private"
+    | "protected"
+    | "static"
+    | "final"
+    | "native"
+    | "synchronized"
+    | "abstract"
+    | "threadsafe"
+    | "transient"
+;
+
+TypeSpecifier :
+    "boolean"
+    | "byte"
+    | "char"
+    | "short"
+    | "int"
+    | "float"
+    | "long"
+    | "double"
+    | ClassName
+    | InterfaceName
+;
+
+FieldDeclaration returns FieldDeclaration :
+    ( comment=DOC_COMMENT?
+    ( name=MethodDeclaration | name=ConstructorDeclaration | name=VariableDeclaration ) )
+    | name=StaticInitializer
+    | ";"
+;
+
+MethodDeclaration :
+    modifiers+=Modifier* type=Type name=ID
+    "(" parameters=ParameterList? ")" ( "[" "]" )* ( statement=StatementBlock | ";" )
+;
+
+ConstructorDeclaration :
+    modifiers+=Modifier* name=ID "(" parameters=ParameterList? ")" statement=StatementBlock
+;
+
+VariableDeclaration :
+    modifiers+=Modifier* type=Type names+=VariableDeclarator ( "," names+=VariableDeclarator )* ";"
+;
+
+StaticInitializer :
+    "static" name=StatementBlock
+;
+
+Type:
+    name=TypeSpecifier ( "[" "]" )*
+;
+
+ParameterList :
+    parameters+=Parameter ( "," parameters+=Parameter )*
+;
+
+Parameter :
+    type=Type name=ID ( "[" "]" )*
+;
+
+StatementBlock :
+    "{" /* Statement* */ "}"
+;
+
+VariableDeclarator :
+    name=ID ( "[" "]" )* ( "=" value=VariableInitializer )?
+;
+
+VariableInitializer :
+    expression=" " /* Expression */ |
+    ( { VariableInitializer } =>
+    "{" ( values+=VariableInitializer ( "," values+=VariableInitializer )* ( "," )? )? "}" )
+;
