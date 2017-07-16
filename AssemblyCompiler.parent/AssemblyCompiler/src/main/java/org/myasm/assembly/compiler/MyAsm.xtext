@@ -1,15 +1,19 @@
-grammar org.myasm.assembly.compiler.MyAsm hidden(WS, ML_COMMENT, SL_COMMENT)
+grammar org.myasm.assembly.compiler.MyAsm hidden(WS, DOC_COMMENT, SL_COMMENT)
 
 generate myAsm "http://www.myasm.org/assembly/compiler/MyAsm"
 
 import "http://www.eclipse.org/emf/2002/Ecore" as ecore
 
-Model :
+Program :
     program=CompilationUnit
 ;
 
-terminal ABSTRACT:
+terminal ABSTRACT :
     "abstract"
+;
+
+terminal AMPERSAND :
+    "ampersand"
 ;
 
 terminal BOOLEAN :
@@ -66,6 +70,10 @@ terminal ELSE :
 
 terminal EXTENDS :
     "extends"
+;
+
+terminal FALSE:
+    "false"
 ;
 
 terminal FINAL :
@@ -171,7 +179,7 @@ terminal THIS :
     "this"
 ;
 
-terminal THREADSAFE:
+terminal THREADSAFE :
     "threadsafe"
 ;
 
@@ -191,6 +199,10 @@ terminal TRY :
     "try"
 ;
 
+terminal TRUE:
+    "true"
+;
+
 terminal VOID :
     "void"
 ;
@@ -203,8 +215,8 @@ terminal WHILE :
     "while"
 ;
 
-terminal EXPONENT_PART :
-    "e" ( "+" | "-" )? DECIMAL_DIGITS
+terminal EXPONENTIAL :
+    "e" ( "+" | "-" )?
 ;
 
 terminal FLOAT_TYPE_SUFFIX :
@@ -224,8 +236,8 @@ terminal STRING:
 ;
 
 terminal ID :
-    ( "a".."z"|"A".."Z"|"_"|"$" )
-    ( "a".."z"|"A".."Z"|"_"|"$"|"0".."9"|"\u00C0".."\u00FF" )*
+    ( "a".."z" | "A".."Z" |"_" |"$" )
+    ( "a".."z" | "A".."Z" |"_" |"$" | "0".."9" )*
 ;
 
 terminal DECIMAL_DIGITS returns ecore::EInt :
@@ -236,20 +248,16 @@ terminal HEXA_DIGITS :
     "0x" ( "0".."9" "a".."f" )+
 ;
 
-terminal ML_COMMENT :
+terminal DOC_COMMENT :
     "/*" -> "*/"
 ;
 
 terminal SL_COMMENT :
-    "//" !( "\n"|"\r" )* ( "\r"? "\n" )?
+    "//" !( "\n" | "\r" )* ( "\r"? "\n" )?
 ;
 
 terminal WS :
-    ( " "|"\t"|"\r"|"\n" )+
-;
-
-terminal DOC_COMMENT :
-    "/**"
+    ( " " | "\t" | "\r" | "\n" )+
 ;
 
 CompilationUnit :
@@ -261,11 +269,11 @@ PackageStatement :
 ;
 
 ImportStatement :
-    IMPORT ( ( package_name=PackageName ".*;" ) | class_name=ClassName ) ";"
+    IMPORT ( ( package_name=PackageName ".*" ) | class_name=ClassName ) ";"
 ;
 
 TypeDeclaration :
-    comment=DOC_COMMENT? ( name=ClassDeclaration | name=InterfaceDeclaration ) ";"
+    comment=DOC_COMMENT? ( name=ClassDeclaration | name=InterfaceDeclaration )
 ;
 
 ClassDeclaration :
@@ -285,11 +293,7 @@ InterfaceDeclaration :
 /* Possible Ambiguity Here */
 
 PackageName :
-    ID PackageNameAuxiliary
-;
-
-PackageNameAuxiliary :
-    ( '.' ID )*
+    ID (=> "." ID )*
 ;
 
 ClassName :
@@ -387,15 +391,15 @@ VariableInitializer :
 ;
 
 Statement :
-    variable_declaration=VariableDeclaration
+    declaration=VariableDeclaration
     | ( expression=Expression ";" )
-    | statement=StatementBlock
-    | statement=IfStatement
-    | statement=DoStatement
-    | statement=WhileStatement
-    | statement=ForStatement
-    | statement=TryStatement
-    | statement=SwitchStatement
+    | block_statement=StatementBlock
+    | if_statement=IfStatement
+    | do_statement=DoStatement
+    | while_statement=WhileStatement
+    | for_statement=ForStatement
+    | try_statement=TryStatement
+    | switch_statement=SwitchStatement
     | ( SYNCHRONIZED "(" expression=Expression ")" statement=Statement )
     | ( RETURN expression=Expression? ";" )
     | ( THROW  expression=Expression  ";" )
@@ -405,118 +409,119 @@ Statement :
     | ";"
 ;
 
-Expression :
-//    expressions+=NumericExpression
-//    | expressions+=TestingExpression
-//    | expressions+=LogicalExpression
-//    | expressions+=StringExpression
-//    | expressions+=BitExpression
-    ( expressions+=CastingExpression
-    | expressions+=CreatingExpression
-    | literals+=LiteralExpression
+Expression returns Expression :
+    ( numeric_expression=NumericExpression
+    | logical_expression=LogicalExpression
+    | bit_expression=BitExpression
+    | casting_expression=CastingExpression
+    | creating_expression=CreatingExpression
+    | literal_expression=LiteralExpression
     | NULL
     | SUPER
     | THIS
-//    TODO(diegoadolfo) fix bug to enable this prodution rule
-//    | name=ID
-    ) expression_auxiliary=ExpressionAuxiliary
+    | name=ID
+    ) expression=ExpressionTerminal
 ;
 
-ExpressionAuxiliary :
-    { ExpressionAuxiliary } => (
-    ( "(" args+=ArgList? ")" )
-    | ( "[" expressions+=Expression "]" )
-    | ( "." expressions+=Expression )
-    | ( "," expressions+=Expression )
-    | ( INSTANCEOF class_name=ClassName ) )*
+ExpressionTerminal returns Expression :
+    (=> "(" args=ArgList? ")" ) next_expression=ExpressionTerminal
+    |=> ( "[" expression=Expression "]" ) next_expression=ExpressionTerminal
+    //TODO(diegoadolfo): fix bug to enable this correct prodution rule
+    |=> ( "->" expression=Expression )
+    |=> ( "," expression=Expression )
+    |=> ( "?" then=Expression ":" else=Expression )
+    |=> ( INSTANCEOF class_name=ClassName ) next_expression=ExpressionTerminal
+    |=> bit_signal=( ">>="|"<<"|">>"|">>>" ) expression=Expression
+    |=> posfix_signal =( "++"|"--" ) expression=Expression
+    |=> string_signal =( "+"|"+=" ) expression=Expression
+    |=> numeric_signal=( "+"|"+="|"-"|"-="|"*"|"*="|"/"|"/="|"%"|"%=" ) expression=Expression
+    |=> testing_signal=( ">"|"<"|">="|"<="|"=="|"!=" ) expression=Expression
+    |=> logical_signal=( AmpersandSignal|"|"|"|="|"^"|"^="|"||="|"%"|"%=" ) expression=Expression
+    | {ExpressionTerminal}
 ;
 
 IfStatement :
-    IF "(" expression=Expression ")" if_statement=Statement
-    (=> ELSE else_statement=Statement )?
+    IF "(" condition=Expression ")" then=Statement
+    (=> ELSE else=Statement )?
 ;
 
 DoStatement :
     DO statement=Statement
-    WHILE "(" expression=Expression ")" ";"
+    WHILE "(" condition=Expression ")" ";"
 ;
 
 WhileStatement :
-    WHILE "(" expression=Expression ")" statement=Statement
+    WHILE "(" condition=Expression ")" statement=Statement
 ;
 
 ForStatement :
     FOR "("
-    ( variable_declaration=VariableDeclaration | ( expression1=Expression ";" ) | ";" )
-    ( expression2=Expression? ";" )
-    ( expression3=Expression? ";" ) ")"
+    ( variable_declaration=VariableDeclaration | ( expression=Expression ";" ) | ";" )
+    ( condition=Expression? ";" )
+    ( increment=Expression? ";" ) ")"
     statement=Statement
 ;
 
 TryStatement :
     TRY try_statement=Statement
-    (=> CATCH "(" parameters+=Parameter ")" catch_statements+=Statement )*
+    (=> CATCH "(" exception=Parameter ")" catch_statement=Statement )*
     (=> FINALLY finally_statement=Statement )?
 ;
 
 SwitchStatement :
-    SWITCH "(" switch_expression=Expression ")" "{"
-    ( ( CASE case_expressions+=Expression ":" )
-    | ( DEFAULT ":" )
-    | statements+=Statement )* "}"
+    SWITCH "(" switch_value=Expression ")" "{"
+    ( CASE case_values+=Expression ":" statements+=Statement )*
+    ( DEFAULT ":" default_statement=Statement )? "}"
 ;
 
-//NumericExpression :
-//    ( ( "-"|"++"|"--" ) expression1=Expression )
-//    | ( expression1=Expression ( "++"|"--" ) )
-//    | ( expression1=Expression ( "+"|"+="|"-"|"-="|"*"|"*="|"/"|"/="|"%"|"%=" ) expression2=Expression )
-//;
-//
-//TestingExpression :
-//    expression1=Expression ( ">"|"<"|">="|"<="|"=="|"!=" ) expression2=Expression
-//;
-//
-//LogicalExpression :
-//    ( "!" Expression)
-//    | ( Expression
-//    ( "ampersand"|"ampersand="|"|"|"|="|"^"|"^="|( "ampersand" "ampersand" )|"||="|"%"|"%=" ) Expression )
-//    | ( Expression "?" Expression ":" Expression)
-//    | "true"
-//    | "false"
-//;
-//
-//StringExpression :
-//    expression1=Expression ( "+"|"+=" ) expression2=Expression
-//;
-//
-//BitExpression :
-//    ( "~" expression1=Expression )
-//    | ( expression1=Expression ( ">>="|"<<"|">>"|">>>" ) expression2=Expression)
-//;
+NumericExpression:
+    prefix_signal=( "-"|"++"|"--" ) expression=Expression
+;
+
+LogicalExpression :
+    ( "!" expression=Expression ) | TRUE | FALSE
+;
+
+BitExpression:
+    "~" expression=Expression
+;
 
 CastingExpression :
     ( "(" type=Type ")" expression=Expression )
 ;
 
 CreatingExpression:
-    NEW ( ( class_name=ClassName  args_expression=ArgsCreateExpression )
+    NEW ( ( class_name=ClassName  args=ArgsCreateExpression )
     | ( type=LiteralSpecifier (=> "["  expression=Expression "]" )? ( "[]" )* )
-    | ( "(" expression=Expression ")" ) )
+    | (=> "(" expression=Expression ")" ) )
 ;
 
 ArgsCreateExpression :
-    ( "(" args=ArgList? ")" )
+    (=> "(" args=ArgList? ")" )
     | (=> "[" expression=Expression "]" )? ( "[]" )*
 ;
 
 LiteralExpression :
-    DECIMAL_DIGITS NumericLiteral | HEXA_DIGITS LONG_TYPE_SUFFIX? | STRING | CHARACTER
+    DECIMAL_DIGITS NumericLiteral
+    | FloatTerminal | HEXA_DIGITS LONG_TYPE_SUFFIX? | STRING | CHARACTER
+;
+
+ExponentPart :
+    EXPONENTIAL DECIMAL_DIGITS
 ;
 
 NumericLiteral :
-    (=> ( "." DECIMAL_DIGITS? EXPONENT_PART? FLOAT_TYPE_SUFFIX? ) | LONG_TYPE_SUFFIX? )
+    (=> "." DECIMAL_DIGITS? ExponentPart? FLOAT_TYPE_SUFFIX? ) | LONG_TYPE_SUFFIX?
+;
+
+FloatTerminal :
+    (=> "." DECIMAL_DIGITS ExponentPart? FLOAT_TYPE_SUFFIX? )
 ;
 
 ArgList :
     expressions+=Expression ( "," expressions+=Expression )*
+;
+
+AmpersandSignal:
+    AMPERSAND ( AMPERSAND | "=" )?
 ;
