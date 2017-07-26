@@ -29,50 +29,48 @@ ImportDeclaration:
 ;
 
 TypeDeclaration:
-    type=( ClassDeclaration | InterfaceDeclaration )
+    ClassDeclaration | InterfaceDeclaration
 ;
 
-ClassDeclaration returns Class:
+ClassDeclaration:
     modifiers+=ClassModifier*
-    CLASS name=IDENTIFIER extends=Inheritance? implements=Interfaces? body=ClassBody
+    CLASS name=IDENTIFIER extends=SuperClass? implements=Interfaces? body=ClassBody
 ;
 
-ClassModifier:
+ClassModifier returns Modifier:
     PUBLIC | ABSTRACT | FINAL
 ;
 
-Inheritance:
-    EXTENDS superClass=ClassType
+SuperClass:
+    EXTENDS name=ClassType
 ;
 
-Interfaces:
-    IMPLEMENTS interfaces+=InterfaceType (=> "," interfaces+=IntegralType )*
+Interfaces returns InterfaceList:
+    keyword=IMPLEMENTS interfaces+=InterfaceType (=> "," interfaces+=IntegralType )*
 ;
 
-ClassBody:
+ClassBody returns BodyCode:
     "{" declarations+=ClassBodyDeclaration* "}"
 ;
 
 ClassBodyDeclaration:
-      classMember=ClassMemberDeclaration
-    | staticBlock=StaticInitializer
-    | classConstructor=ConstructorDeclaration
+    ClassMemberDeclaration | StaticInitializer | ConstructorDeclaration
 ;
 
 ClassMemberDeclaration:
-    attribute=FieldDeclaration | method=MethodDeclaration
+    FieldDeclaration | MethodDeclaration
 ;
 
 StaticInitializer:
-    STATIC body=Block
+    STATIC code=Block
 ;
 
-ConstructorDeclaration returns Constructor:
+ConstructorDeclaration:
     modifiers+=ConstructorModifier*
     header=ConstructorDeclarator throws=Exceptions? body=ConstructorBody
 ;
 
-ConstructorModifier:
+ConstructorModifier returns Modifier:
     PUBLIC | PROTECTED | PRIVATE
 ;
 
@@ -89,34 +87,34 @@ Exceptions:
     THROWS exceptions+=ClassType (=> "," exceptions+=ClassType )*
 ;
 
-ConstructorBody:
-    "{" selfInvocation=ExplicitConstructorInvocation? statements+=BlockStatement* "}"
+ConstructorBody returns BodyCode:
+    "{" invocation=ExplicitConstructorInvocation? declarations+=BlockStatement* "}"
 ;
 
 ExplicitConstructorInvocation:
-    ( THIS "(" args=ArgumentList? ")" ) | ( SUPER "(" args=ArgumentList? ")" )
+    ( keyword=THIS "(" args=ArgumentList? ")" ) | ( keyword=SUPER "(" args=ArgumentList? ")" )
 ;
 
 FieldDeclaration returns Variable:
     modifiers+=FieldModifier*
-    type=Type variables+=VariableDeclarator (=> "," variables+=VariableDeclarator )* ";"
+    type=Type declarations+=VariableDeclarator (=> "," declarations+=VariableDeclarator )* ";"
 ;
 
-FieldModifier:
+FieldModifier returns Modifier:
     PUBLIC | PROTECTED | PRIVATE | STATIC | FINAL | TRANSIENT | VOLATILE
 ;
 
 VariableDeclarator:
-    name=VariableDeclaratorId
-    ( "=" value=VariableInitializer )?
+    facade=VariableDeclaratorId
+    ( "=" definition=VariableInitializer )?
 ;
 
 VariableDeclaratorId:
-    IDENTIFIER ( "[]" )*
+    name=IDENTIFIER layers+=( "[]" )*
 ;
 
 VariableInitializer:
-    expression=Expression | array=ArrayInitializer
+    Expression | ArrayInitializer
 ;
 
 MethodDeclaration returns Method:
@@ -132,7 +130,7 @@ ResultType returns Type:
     Type | VOID
 ;
 
-MethodModifier:
+MethodModifier returns Modifier:
     PUBLIC | PROTECTED | PRIVATE | STATIC | ABSTRACT | FINAL | SYNCHRONIZED | NATIVE
 ;
 
@@ -141,32 +139,32 @@ MethodDeclarator:
     "(" ( params+=FormalParameter (=> "," params+=FormalParameter)* )? ")"
 ;
 
-InterfaceDeclaration returns Interface:
+InterfaceDeclaration:
     modifiers+=InterfaceModifier*
     INTERFACE name=IDENTIFIER extends=ExtendsInterfaces? body=InterfaceBody
 ;
 
-InterfaceModifier:
+InterfaceModifier returns Modifier:
     PUBLIC | ABSTRACT
 ;
 
-ExtendsInterfaces:
-    EXTENDS interfaces+=InterfaceType ( "," interfaces+=InterfaceType )*
+ExtendsInterfaces returns InterfaceList:
+    keyword=EXTENDS interfaces+=InterfaceType ( "," interfaces+=InterfaceType )*
 ;
 
-InterfaceBody:
+InterfaceBody returns BodyCode:
     "{" declarations+=InterfaceMemberDeclaration* "}"
 ;
 
 InterfaceMemberDeclaration:
-    constant=ConstantDeclaration | method=AbstractMethodDeclaration
+    ConstantDeclaration | AbstractMethodDeclaration
 ;
 
 ConstantDeclaration returns Variable:
-    modifiers+=ConstantModifiers* type=Type declaration=VariableDeclarator
+    modifiers+=ConstantModifiers* type=Type declarations+=VariableDeclarator
 ;
 
-ConstantModifiers:
+ConstantModifiers returns Modifier:
     PUBLIC | STATIC | FINAL
 ;
 
@@ -175,12 +173,12 @@ AbstractMethodDeclaration returns Method:
     returnType=ResultType header=MethodDeclarator throws=Exceptions? ";"
 ;
 
-AbstractMethodModifier:
+AbstractMethodModifier returns Modifier:
     PUBLIC | ABSTRACT
 ;
 
 ArrayInitializer:
-    "{" ( variables+=VariableInitializer (=> "," variables+=VariableInitializer )* )? ","? "}"
+    "{" ( definitions+=VariableInitializer (=> "," definitions+=VariableInitializer )* )? ","? "}"
 ;
 
 // ===============================================
@@ -228,37 +226,33 @@ ArrayType:
 // ===============================================
 
 Block:
-    "{" statements+=BlockStatement* "}"
+    "{" declarations+=BlockStatement* "}"
 ;
 
 BlockStatement:
-    ( localVariable=LocalVariableDeclaration ";" ) | statement=Statement
+    ( LocalVariableDeclaration ";" ) | Statement
 ;
 
 LocalVariableDeclaration returns Variable:
-    type=Type variables+=VariableDeclarator (=> "," variables+=VariableDeclarator )*
+    type=Type declarations+=VariableDeclarator (=> "," declarations+=VariableDeclarator )*
 ;
 
 Statement:
-    subStatement=StatementWithoutTrailingSubstatement
-    | labelStatement=LabeledStatement
-    | ifStatement=IfStatement
-    | whileStatement=WhileStatement
-    | forStatement=ForStatement
-;
-
-StatementWithoutTrailingSubstatement:
-    blockStatement=Block
-    | emptyStatement=EmptyStatement
-    | expressionStatement=ExpressionStatement
-    | swtchStatement=SwitchStatement
-    | doStatement=DoStatement
-    | breakStatemet=BreakStatement
-    | continueStatement=ContinueStatement
-    | returnStatement=ReturnStatement
-    | syscStatement=SynchronizedStatement
-    | throwStatement=ThrowsStatement
-    | tryStatement=TryStatement
+    EmptyStatement
+    | LabeledStatement
+    | IfStatement
+    | WhileStatement
+    | ForStatement
+    | Block
+    | ( StatementExpression ";" )
+    | SwitchStatement
+    | DoStatement
+    | BreakStatement
+    | ContinueStatement
+    | ReturnStatement
+    | SynchronizedStatement
+    | ThrowsStatement
+    | TryStatement
 ;
 
 EmptyStatement:
@@ -269,17 +263,13 @@ LabeledStatement:
     label=IDENTIFIER ":" statement=Statement
 ;
 
-ExpressionStatement:
-    expression=StatementExpression ";"
-;
-
 StatementExpression:
-     => assignment=Assignment
-    | expression=PreIncrementExpression
-    | expression=PreDecrementExpression
-    |=> expression=PostfixExpression
-    |=> methodCall=MethodInvocation
-    |=> classCreate=ClassInstanceCreationExpression
+     => Assignment
+    | PreIncrementExpression
+    | PreDecrementExpression
+    |=> PostfixExpression
+    |=> MethodInvocation
+    |=> ClassInstanceCreationExpression
 ;
 
 IfStatement:
@@ -289,7 +279,7 @@ IfStatement:
 
 SwitchStatement:
     SWITCH "(" expression=Expression ")" "{"
-    ( ( CASE constantExpr+=ConstantExpression ":" )
+    ( ( CASE   constants+=Expression ":" )
     | ( DEFAULT ":" )
     | statements+=BlockStatement )* "}"
 ;
@@ -303,22 +293,21 @@ DoStatement:
 ;
 
 ForStatement:
-    FOR "(" declaration=ForInit? ";" condition?=Expression? ";" updateExpr=ForUpdate? ")"
+    FOR "(" initExpr=ForInit? ";" condition?=Expression? ";" updateExpr=ForUpdate? ")"
     statement=Statement
 ;
 
-ForInit:
-    ( expressions+=StatementExpression (=> "," expressions+=StatementExpression )* )
-    | variable=LocalVariableDeclaration
+ForInit   returns ForExpression:
+    ( expressions +=StatementExpression (=> "," expressions+=StatementExpression )* )
+    | LocalVariableDeclaration
 ;
 
-ForUpdate:
-    expressions+=StatementExpression
-    (=> "," expressions+=StatementExpression )*
+ForUpdate returns ForExpression:
+    ( expressions +=StatementExpression (=> "," expressions+=StatementExpression )* )
 ;
 
 BreakStatement:
-    BREAK reference=IDENTIFIER? ";"
+    BREAK    reference=IDENTIFIER? ";"
 ;
 
 ContinueStatement:
@@ -334,39 +323,29 @@ ThrowsStatement:
 ;
 
 SynchronizedStatement:
-    SYNCHRONIZED "(" expression=Expression ")" synsBlock=Block
+    SYNCHRONIZED "(" expression=Expression ")" body=Block
 ;
 
 TryStatement:
-    TRY tryBlock=Block
-    (=> CATCH "(" params+=FormalParameter ")" catchBlocks+=Block )*
-    (=> FINALLY finallyBlock=Block )?
+    TRY tryBody=Block
+    (=> CATCH "(" params+=FormalParameter ")" catchesBody+=Block )*
+    (=> FINALLY finallyBody=Block )?
 ;
 
 // ===============================================
 // ===                 Expression              ===
 // ===============================================
 
-ConstantExpression:
-    constant=Expression
-;
-
 Expression:
-    expression=AssignmentExpression
+    => ConditionalExpression | Assignment
 ;
 
-AssignmentExpression:
-    => condition?=ConditionalExpression | assigment=Assignment
-;
-
-Assignment returns Assigment:
-    object=LeftHandSide operator=AssignmentOperator value=AssignmentExpression
+Assignment:
+    object=LeftHandSide operator=AssignmentOperator expression=Expression
 ;
 
 LeftHandSide:
-      => reference=ExpressionName
-    | => fieldAccess=FieldAccess
-    | => arrayAccess=ArrayAccess
+      => ExpressionName | => FieldAccess | => ArrayAccess
 ;
 
 AssignmentOperator:
@@ -374,7 +353,7 @@ AssignmentOperator:
 ;
 
 ConditionalExpression:
-    condition?=ConditionalOrExpression
+    expression=ConditionalOrExpression
     (=> "?" then=Expression ":" else=ConditionalExpression )?
 ;
 
@@ -435,62 +414,71 @@ CastExpression:
 ;
 
 NoArrayExpression:
-      expression=PreIncrementExpression
-    | expression=PreDecrementExpression
-    | operator="+" expression=NoArrayExpression
-    | operator="-" expression=NoArrayExpression
-    | expression=NoArrayExpressionWithoutMinus
+      PreIncrementExpression
+    | PreDecrementExpression
+    | SignedExpression
+    | NoArrayExpressionWithoutMinus
 ;
 
-PreDecrementExpression:
+PreDecrementExpression returns PrefixExpression:
     operator="--" expression=NoArrayExpression
 ;
 
-PreIncrementExpression:
+PreIncrementExpression returns PrefixExpression:
     operator="++" expression=NoArrayExpression
 ;
 
+SignedExpression:
+    operator=( "+" | "-" ) expression=NoArrayExpression
+;
+
 NoArrayExpressionWithoutMinus:
-    => expression=PostfixExpression
+    => PostfixExpression
     | operator="~" expression=NoArrayExpression
     | operator="!" expression=NoArrayExpression
-    | expression=CastExpression
+    | CastExpression
 ;
 
 PostfixExpression:
-    ( => object=Primary | reference=ExpressionName ) operators+=( "--" | "++" )*
+    object=Primary operator=( "--" | "++" )?
+//    ( => Primary | ExpressionName ) ( "--" | "++" )
 ;
 
 MethodInvocation:
-      ( method=MethodName "(" args=ArgumentList? ")" )
-    | => ( object=Primary "." method=IDENTIFIER "(" args=ArgumentList? ")" )
-    | => ( super =SUPER   "." method=IDENTIFIER "(" args=ArgumentList? ")" )
+        ( method=MethodName "(" args=ArgumentList? ")" )
+      | ( => object=Primary "." method=IDENTIFIER "(" args=ArgumentList? ")" )
+//    | => ( Primary "." IDENTIFIER "(" ArgumentList? ")" )
+//    | => ( SUPER   "." IDENTIFIER "(" ArgumentList? ")" )
 ;
 
 FieldAccess:
-    ( object=Primary "." field=IDENTIFIER ) | => ( super=SUPER "." field=IDENTIFIER )
+    object=Primary "." field=IDENTIFIER
+//    ( Primary "." IDENTIFIER ) | => ( SUPER "." IDENTIFIER )
 ;
 
 Primary:
-    => reference=( PrimaryNoNewArray | PrimaryNewArray )
+    => PrimaryNoNewArray | PrimaryNewArray
 ;
 
 PrimaryNoNewArray:
     ( literal=Literal
-    | this=THIS
+    | keyword=THIS
     | ( "(" expression=Expression ")" )
-    | class=ClassInstanceCreationExpression
-    | super=SUPER
-    | ( method=MethodName "(" args+=ArgumentList? ")" )
-    | ( reference=ExpressionName dimentions+=DimentionsExpression ) )
-    => ( ( "." fields+=IDENTIFIER ( "(" args+=ArgumentList? ")" )? )
-    | dimentions+=DimentionsExpression )*
+    | class  =ClassInstanceCreationExpression
+    | keyword=SUPER
+    | ( keyword=MethodName "(" args=ArgumentList? ")" )
+    | ( keyword=ExpressionName dimention=DimentionsExpression ) )
+    extension=ExpressionExtends
+//    => ( ( "." IDENTIFIER ( "(" ArgumentList? ")" )? ) | DimentionsExpression )*
 ;
 
 PrimaryNewArray:
-    array=ArrayCreationExpression
-    => ( ( "." fields+=IDENTIFIER ( "(" args+=ArgumentList? ")" )? )
-    | dimentions+=DimentionsExpression )*
+    class=ArrayCreationExpression extension=ExpressionExtends
+//    => ( ( "." IDENTIFIER ( "(" ArgumentList? ")" )? ) | DimentionsExpression )*
+;
+
+ExpressionExtends:
+    => ( ( "." field=IDENTIFIER ( "(" args=ArgumentList? ")" )? ) | dimention=DimentionsExpression )*
 ;
 
 ClassInstanceCreationExpression:
@@ -502,8 +490,8 @@ ArgumentList:
 ;
 
 ArrayCreationExpression:
-    NEW ( type=PrimitiveType | type=TypeName )
-    => fields+=DimentionsExpression+ dimentions+=ArrayType*
+    NEW type=( PrimitiveType | TypeName )
+    => expressions+=DimentionsExpression+ dimentions+=ArrayType*
 ;
 
 DimentionsExpression:
@@ -511,7 +499,8 @@ DimentionsExpression:
 ;
 
 ArrayAccess:
-    ( => reference=ExpressionName | array=PrimaryNoNewArray ) field=DimentionsExpression
+    object=PrimaryNoNewArray index=DimentionsExpression
+//    ( => ExpressionName | PrimaryNoNewArray ) DimentionsExpression
 ;
 
 // ===============================================
@@ -547,8 +536,8 @@ AmbiguousName:
     ( => "." IDENTIFIER )*
 ;
 
-Literal:
-    IntegerLiteral | FloatingLiteral | BooleanLiteral | CHARACTER_LITERAL | STRING_LITERAL | NULL
+Literal returns Literal:
+    type=( IntegerLiteral | FloatingLiteral | BooleanLiteral | CHARACTER_LITERAL | STRING_LITERAL | NULL )
 ;
 
 IntegerLiteral:
