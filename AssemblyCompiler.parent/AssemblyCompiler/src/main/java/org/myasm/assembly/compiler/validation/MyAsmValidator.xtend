@@ -3,6 +3,16 @@
  */
 package org.myasm.assembly.compiler.validation
 
+import org.eclipse.xtext.validation.Check
+import org.myasm.assembly.compiler.myAsm.Variable
+import org.myasm.assembly.compiler.myAsm.VariableDeclarator
+import org.myasm.assembly.compiler.myAsm.ConditionalAndExpression
+import org.eclipse.emf.ecore.EObject
+import org.myasm.assembly.compiler.myAsm.VariableInitializer
+import org.myasm.assembly.compiler.myAsm.ConditionalExpression
+import org.myasm.assembly.compiler.myAsm.ConditionalOrExpression
+import org.myasm.assembly.compiler.myAsm.Literal
+import org.myasm.assembly.compiler.myAsm.Expression
 
 /**
  * This class contains custom validation rules. 
@@ -21,5 +31,25 @@ class MyAsmValidator extends AbstractMyAsmValidator {
 //					INVALID_NAME)
 //		}
 //	}
-	
+
+    @Check
+    def checkVariableDeclarator(Variable variable) {
+        for (VariableDeclarator d : variable.declarations) {
+            println(d.getDefinition())
+//            println(d.getDefinition().eClass())
+//            println(d.getFacade().getName())
+//            var ConditionalExpression cond = d.getDefinition().getValue() as ConditionalExpression
+//            var Expression expr = d.getDefinition() as Expression
+            var ConditionalExpression expr = d.getDefinition() as ConditionalExpression
+
+            println(expr.getLiteral())
+            println(expr.getExpression().getExpression())
+//            var NoArrayExpression lit = expr as NoArrayExpression
+//            var ConditionalOrExpression expr1 = expr.getExpression()
+//            var ConditionalAndExpression expr = d.getDefinition().eClass() as ConditionalAndExpression
+//            println(cond.getExpression())
+//            println(expr1)
+        }
+    }
+
 }

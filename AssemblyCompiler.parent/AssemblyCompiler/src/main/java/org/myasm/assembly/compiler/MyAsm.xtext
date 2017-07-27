@@ -340,7 +340,7 @@ Expression:
     => ConditionalExpression | Assignment
 ;
 
-Assignment:
+Assignment returns Assignment:
     object=LeftHandSide operator=AssignmentOperator expression=Expression
 ;
 
@@ -358,54 +358,54 @@ ConditionalExpression:
 ;
 
 ConditionalOrExpression:
-    expressions+=ConditionalAndExpression
-    (=> operators+="||" expressions+=ConditionalAndExpression )*
+    expression=ConditionalAndExpression
+    (=> operator="||" expression=ConditionalAndExpression )*
 ;
 
 ConditionalAndExpression:
-    expressions+=InclusiveOrExpression
-    (=> operators+="&&" expressions+=InclusiveOrExpression )*
+    expression=InclusiveOrExpression
+    (=> operator="&&" expression=InclusiveOrExpression )*
 ;
 
 InclusiveOrExpression:
-    expressions+=ExclusiveOrExpression
-    (=> operators+="|" expressions+=ExclusiveOrExpression )*
+    expression=ExclusiveOrExpression
+    (=> operator="|" expression=ExclusiveOrExpression )*
 ;
 
 ExclusiveOrExpression:
-    expressions+=AndExpression
-    (=> operators+="^" expressions+=AndExpression )*
+    expression=AndExpression
+    (=> operator="^" expression=AndExpression )*
 ;
 
 AndExpression:
-    expressions+=EqualityExpression
-    (=> operators+="&" expressions+=EqualityExpression )*
+    expression=EqualityExpression
+    (=> operator="&" expression=EqualityExpression )*
 ;
 
 EqualityExpression:
-    expressions+=RelationalExpression
-    (=> operators+=( "==" | "!=" ) expressions+=RelationalExpression )*
+    expression=RelationalExpression
+    (=> operator=( "==" | "!=" ) expression=RelationalExpression )*
 ;
 
 RelationalExpression:
-    expressions+=ShiftExpression
-    ( => ( operators+=( "<" | ">" | "<=" | ">=" ) expressions+=ShiftExpression )
-    | => ( operators+=INSTANCEOF classes+=ReferenceType ) )*
+    expression=ShiftExpression
+    ( => ( operator=( "<" | ">" | "<=" | ">=" ) expression=ShiftExpression )
+    | => ( operator=INSTANCEOF classes+=ReferenceType ) )*
 ;
 
 ShiftExpression:
-    expressions+=AdditiveExpression
-    (=> operator+=( "<<" | ">>" | ">>>" ) expressions+=AdditiveExpression )*
+    expression=AdditiveExpression
+    (=> operator=( "<<" | ">>" | ">>>" ) expression=AdditiveExpression )*
 ;
 
 AdditiveExpression:
-    expressions+=MultiplicativeExpression
-    (=> operators+=( "+" | "-" ) expressions+=MultiplicativeExpression )*
+    expression=MultiplicativeExpression
+    (=> operator=( "+" | "-" ) expression=MultiplicativeExpression )*
 ;
 
 MultiplicativeExpression:
-    expressions+=NoArrayExpression
-    (=> operators+=( "*" | "/" | "%" ) expressions+=NoArrayExpression )*
+    expression=NoArrayExpression
+    (=> operator=( "*" | "/" | "%" ) expression=NoArrayExpression )*
 ;
 
 CastExpression:
@@ -413,7 +413,7 @@ CastExpression:
     |=> "(" type=ReferenceType ")" expression=NoArrayExpressionWithoutMinus
 ;
 
-NoArrayExpression:
+NoArrayExpression returns Expression:
       PreIncrementExpression
     | PreDecrementExpression
     | SignedExpression
@@ -432,10 +432,10 @@ SignedExpression:
     operator=( "+" | "-" ) expression=NoArrayExpression
 ;
 
-NoArrayExpressionWithoutMinus:
+NoArrayExpressionWithoutMinus returns Expression:
     => PostfixExpression
-    | operator="~" expression=NoArrayExpression
-    | operator="!" expression=NoArrayExpression
+    | {BitExpression}    operator="~" expression=NoArrayExpression
+    | {LogicalExpression}operator="!" expression=NoArrayExpression
     | CastExpression
 ;
 
@@ -457,10 +457,10 @@ FieldAccess:
 ;
 
 Primary:
-    => PrimaryNoNewArray | PrimaryNewArray
+    {Expression} => value=( PrimaryNoNewArray | PrimaryNewArray )
 ;
 
-PrimaryNoNewArray:
+PrimaryNoNewArray returns Primary:
     ( literal=Literal
     | keyword=THIS
     | ( "(" expression=Expression ")" )
@@ -472,7 +472,7 @@ PrimaryNoNewArray:
 //    => ( ( "." IDENTIFIER ( "(" ArgumentList? ")" )? ) | DimentionsExpression )*
 ;
 
-PrimaryNewArray:
+PrimaryNewArray returns Primary:
     class=ArrayCreationExpression extension=ExpressionExtends
 //    => ( ( "." IDENTIFIER ( "(" ArgumentList? ")" )? ) | DimentionsExpression )*
 ;
