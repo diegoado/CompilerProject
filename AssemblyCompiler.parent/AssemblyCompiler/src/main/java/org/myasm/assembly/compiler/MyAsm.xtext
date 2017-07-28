@@ -114,7 +114,7 @@ VariableDeclaratorId:
 ;
 
 VariableInitializer:
-    Expression | ArrayInitializer
+    value=( Expression | ArrayInitializer)
 ;
 
 MethodDeclaration returns Method:
@@ -127,7 +127,7 @@ MethodHeader:
 ;
 
 ResultType returns Type:
-    Type | VOID
+    Type | name=VOID
 ;
 
 MethodModifier returns Modifier:
@@ -186,7 +186,7 @@ ArrayInitializer:
 // ===============================================
 
 Type returns Type:
-    ( PrimitiveType | ReferenceType ) ArrayType*
+    name=( PrimitiveType | ReferenceType ) layers+=ArrayType*
 ;
 
 PrimitiveType:
@@ -239,20 +239,20 @@ LocalVariableDeclaration returns Variable:
 
 Statement:
     EmptyStatement
-    | LabeledStatement
-    | IfStatement
-    | WhileStatement
-    | ForStatement
-    | Block
-    | ( StatementExpression ";" )
-    | SwitchStatement
-    | DoStatement
-    | BreakStatement
-    | ContinueStatement
-    | ReturnStatement
-    | SynchronizedStatement
-    | ThrowsStatement
-    | TryStatement
+    | command=LabeledStatement
+    | command=IfStatement
+    | command=WhileStatement
+    | command=ForStatement
+    | command=Block
+    | ( command=StatementExpression ";" )
+    | command=SwitchStatement
+    | command=DoStatement
+    | command=BreakStatement
+    | command=ContinueStatement
+    | command=ReturnStatement
+    | command=SynchronizedStatement
+    | command=ThrowsStatement
+    | command=TryStatement
 ;
 
 EmptyStatement:
@@ -263,7 +263,7 @@ LabeledStatement:
     label=IDENTIFIER ":" statement=Statement
 ;
 
-StatementExpression:
+StatementExpression returns Expression:
      => Assignment
     | PreIncrementExpression
     | PreDecrementExpression
@@ -298,12 +298,12 @@ ForStatement:
 ;
 
 ForInit   returns ForExpression:
-    ( expressions +=StatementExpression (=> "," expressions+=StatementExpression )* )
-    | LocalVariableDeclaration
+    ( expressions+=StatementExpression (=> "," expressions+=StatementExpression )* )
+    | variables   =LocalVariableDeclaration
 ;
 
 ForUpdate returns ForExpression:
-    ( expressions +=StatementExpression (=> "," expressions+=StatementExpression )* )
+    ( expressions+=StatementExpression (=> "," expressions+=StatementExpression )* )
 ;
 
 BreakStatement:
@@ -413,7 +413,7 @@ CastExpression:
     |=> "(" type=ReferenceType ")" expression=NoArrayExpressionWithoutMinus
 ;
 
-NoArrayExpression returns Expression:
+NoArrayExpression:
       PreIncrementExpression
     | PreDecrementExpression
     | SignedExpression
@@ -432,74 +432,69 @@ SignedExpression:
     operator=( "+" | "-" ) expression=NoArrayExpression
 ;
 
-NoArrayExpressionWithoutMinus returns Expression:
+NoArrayExpressionWithoutMinus:
     => PostfixExpression
-    | {BitExpression}    operator="~" expression=NoArrayExpression
-    | {LogicalExpression}operator="!" expression=NoArrayExpression
+    | {BitExpression}     operator="~" expression=NoArrayExpression
+    | {LogicalExpression} operator="!" expression=NoArrayExpression
     | CastExpression
 ;
 
 PostfixExpression:
-    object=Primary operator=( "--" | "++" )?
+    primary=Primary operator=( "--" | "++" )?
 //    ( => Primary | ExpressionName ) ( "--" | "++" )
 ;
 
 MethodInvocation:
         ( method=MethodName "(" args=ArgumentList? ")" )
-      | ( => object=Primary "." method=IDENTIFIER "(" args=ArgumentList? ")" )
+      | ( => primary=Primary "." method=IDENTIFIER "(" args=ArgumentList? ")" )
 //    | => ( Primary "." IDENTIFIER "(" ArgumentList? ")" )
 //    | => ( SUPER   "." IDENTIFIER "(" ArgumentList? ")" )
 ;
 
 FieldAccess:
-    object=Primary "." field=IDENTIFIER
+    primary=Primary "." field=IDENTIFIER
 //    ( Primary "." IDENTIFIER ) | => ( SUPER "." IDENTIFIER )
 ;
 
 Primary:
-    {Expression} => value=( PrimaryNoNewArray | PrimaryNewArray )
+    => expression=( PrimaryNoNewArray | PrimaryNewArray )
 ;
 
-PrimaryNoNewArray returns Primary:
+PrimaryNoNewArray returns PrimaryExpression:
     ( literal=Literal
-    | keyword=THIS
-    | ( "(" expression=Expression ")" )
-    | class  =ClassInstanceCreationExpression
-    | keyword=SUPER
-    | ( keyword=MethodName "(" args=ArgumentList? ")" )
-    | ( keyword=ExpressionName dimention=DimentionsExpression ) )
-    extension=ExpressionExtends
-//    => ( ( "." IDENTIFIER ( "(" ArgumentList? ")" )? ) | DimentionsExpression )*
+    | object =ClassInstanceCreationExpression
+    | ( "(" Expression ")" )
+    | this  =THIS
+    | super =SUPER
+    | => method=MethodName
+    | => array =ExpressionName )
+    => ( ( "." fields+=IDENTIFIER ( "(" args+=ArgumentList? ")" )? ) | dimensions+=DimensionsExpression )*
 ;
 
-PrimaryNewArray returns Primary:
-    class=ArrayCreationExpression extension=ExpressionExtends
-//    => ( ( "." IDENTIFIER ( "(" ArgumentList? ")" )? ) | DimentionsExpression )*
+PrimaryNewArray returns PrimaryExpression:
+    object=ArrayCreationExpression
+    => ( ( "." fields+=IDENTIFIER ( "(" args+=ArgumentList? ")" )? ) | dimensions+=DimensionsExpression )*
 ;
 
-ExpressionExtends:
-    => ( ( "." field=IDENTIFIER ( "(" args=ArgumentList? ")" )? ) | dimention=DimentionsExpression )*
-;
-
-ClassInstanceCreationExpression:
-    NEW class=ClassType "(" args=ArgumentList? ")"
+ClassInstanceCreationExpression returns CreatingExpression:
+    NEW type=ClassType "(" arguments=ArgumentList? ")"
 ;
 
 ArgumentList:
-    expression+=Expression (=> "," expressions+=Expression )*
+    expressions+=Expression (=> "," expressions+=Expression )*
 ;
 
-ArrayCreationExpression:
+ArrayCreationExpression returns CreatingExpression:
     NEW type=( PrimitiveType | TypeName )
-    => expressions+=DimentionsExpression+ dimentions+=ArrayType*
+    => dimensions+=DimensionsExpression+ layers+=ArrayType*
 ;
 
-DimentionsExpression:
+DimensionsExpression:
     "[" expression=Expression "]"
 ;
 
 ArrayAccess:
-    object=PrimaryNoNewArray index=DimentionsExpression
+    object=PrimaryNoNewArray index=DimensionsExpression
 //    ( => ExpressionName | PrimaryNoNewArray ) DimentionsExpression
 ;
 
@@ -537,7 +532,7 @@ AmbiguousName:
 ;
 
 Literal returns Literal:
-    type=( IntegerLiteral | FloatingLiteral | BooleanLiteral | CHARACTER_LITERAL | STRING_LITERAL | NULL )
+    type=( IntegerLiteral | FloatingLiteral | BooleanLiteral | CharacterLiteral | StringLiteral | NullLiteral )
 ;
 
 IntegerLiteral:
@@ -545,14 +540,24 @@ IntegerLiteral:
 ;
 
 FloatingLiteral:
-    ( ( DECIMAL_NUMERAL "." DECIMAL_NUMERAL* ) | ( "." DECIMAL_NUMERAL ) | DECIMAL_NUMERAL )
-    FLOAT_PART_COMPLEMENT
+    ( ( DECIMAL_NUMERAL "." DECIMAL_NUMERAL* ) | ( "." DECIMAL_NUMERAL ) | DECIMAL_NUMERAL ) FLOAT_PART_COMPLEMENT
 ;
 
 BooleanLiteral:
-    TRUE | FALSE
+    ( TRUE | FALSE )
 ;
 
+CharacterLiteral:
+    CHARACTER_LITERAL
+;
+
+StringLiteral:
+    STRING_LITERAL
+;
+
+NullLiteral:
+    NULL
+;
 // ===============================================
 // ===                Terminals                ===
 // ===============================================
