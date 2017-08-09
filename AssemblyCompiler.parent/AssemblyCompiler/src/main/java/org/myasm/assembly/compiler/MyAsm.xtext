@@ -37,7 +37,7 @@ ClassDeclaration:
     CLASS name=IDENTIFIER extends=SuperClass? implements=Interfaces? body=ClassBody
 ;
 
-ClassModifier returns Modifier:
+ClassModifier:
     PUBLIC | ABSTRACT | FINAL
 ;
 
@@ -70,7 +70,7 @@ ConstructorDeclaration:
     header=ConstructorDeclarator throws=Exceptions? body=ConstructorBody
 ;
 
-ConstructorModifier returns Modifier:
+ConstructorModifier:
     PUBLIC | PROTECTED | PRIVATE
 ;
 
@@ -100,7 +100,7 @@ FieldDeclaration returns Attribute:
     type=Type declarations+=VariableDeclarator (=> "," declarations+=VariableDeclarator )* ";"
 ;
 
-FieldModifier returns Modifier:
+FieldModifier:
     PUBLIC | PROTECTED | PRIVATE | STATIC | FINAL | TRANSIENT | VOLATILE
 ;
 
@@ -126,7 +126,7 @@ MethodHeader:
     type=ResultType header=MethodDeclarator throws=Exceptions?
 ;
 
-MethodModifier returns Modifier:
+MethodModifier:
     PUBLIC | PROTECTED | PRIVATE | STATIC | ABSTRACT | FINAL | SYNCHRONIZED | NATIVE
 ;
 
@@ -140,7 +140,7 @@ InterfaceDeclaration:
     INTERFACE name=IDENTIFIER extends=ExtendsInterfaces? body=InterfaceBody
 ;
 
-InterfaceModifier returns Modifier:
+InterfaceModifier:
     PUBLIC | ABSTRACT
 ;
 
@@ -160,7 +160,7 @@ ConstantDeclaration returns Variable:
     modifiers+=ConstantModifiers* type=Type declarations+=VariableDeclarator
 ;
 
-ConstantModifiers returns Modifier:
+ConstantModifiers:
     PUBLIC | STATIC | FINAL
 ;
 
@@ -169,7 +169,7 @@ AbstractMethodDeclaration returns Method:
     type=ResultType header=MethodDeclarator throws=Exceptions? ";"
 ;
 
-AbstractMethodModifier returns Modifier:
+AbstractMethodModifier:
     PUBLIC | ABSTRACT
 ;
 
