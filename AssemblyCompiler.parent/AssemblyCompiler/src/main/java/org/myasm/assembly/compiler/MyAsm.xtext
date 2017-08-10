@@ -25,7 +25,7 @@ PackageDeclaration:
 ;
 
 ImportDeclaration:
-    => IMPORT ( package=PackageName ".*" | object=TypeName ) ";"
+    => IMPORT ( name=PackageName ".*" | name=TypeName ) ";"
 ;
 
 TypeDeclaration:
@@ -46,10 +46,10 @@ SuperClass:
 ;
 
 Interfaces returns InterfaceList:
-    keyword=IMPLEMENTS interfaces+=InterfaceName (=> "," interfaces+=InterfaceName )*
+    keyword=IMPLEMENTS interfaces+=InterfaceName ( => "," interfaces+=InterfaceName )*
 ;
 
-ClassBody returns BodyCode:
+ClassBody returns DeclarationBody:
     "{" declarations+=ClassBodyDeclaration* "}"
 ;
 
@@ -76,7 +76,7 @@ ConstructorModifier:
 
 ConstructorDeclarator:
     name=SimpleTypeName
-    "(" ( params+=FormalParameter (=> "," params+=FormalParameter )* )? ")"
+    "(" ( params+=FormalParameter ( => "," params+=FormalParameter )* )? ")"
 ;
 
 FormalParameter:
@@ -84,10 +84,10 @@ FormalParameter:
 ;
 
 Exceptions:
-    THROWS exceptions+=ClassName (=> "," exceptions+=ClassName )*
+    THROWS exceptions+=ClassName ( => "," exceptions+=ClassName )*
 ;
 
-ConstructorBody returns BodyCode:
+ConstructorBody returns DeclarationBody:
     "{" invocation=ExplicitConstructorInvocation? => declarations+=BlockStatement* "}"
 ;
 
@@ -96,8 +96,8 @@ ExplicitConstructorInvocation:
 ;
 
 FieldDeclaration returns Attribute:
-    {Variable} modifiers+=FieldModifier*
-    type=Type declarations+=VariableDeclarator (=> "," declarations+=VariableDeclarator )* ";"
+    modifiers+=FieldModifier*
+    type=Type declarations+=VariableDeclarator ( => "," declarations+=VariableDeclarator )* ";"
 ;
 
 FieldModifier:
@@ -117,11 +117,11 @@ VariableInitializer:
     Expression | ArrayInitializer
 ;
 
-MethodDeclaration returns Method:
+MethodDeclaration:
     signature=MethodHeader ( body=Block | ";" )
 ;
 
-MethodHeader:
+MethodHeader returns Method:
     modifiers+=MethodModifier*
     type=ResultType header=MethodDeclarator throws=Exceptions?
 ;
@@ -132,7 +132,7 @@ MethodModifier:
 
 MethodDeclarator:
     name=IDENTIFIER
-    "(" ( params+=FormalParameter (=> "," params+=FormalParameter)* )? ")"
+    "(" ( params+=FormalParameter ( => "," params+=FormalParameter)* )? ")"
 ;
 
 InterfaceDeclaration:
@@ -145,10 +145,10 @@ InterfaceModifier:
 ;
 
 ExtendsInterfaces returns InterfaceList:
-    keyword=EXTENDS interfaces+=InterfaceName ( "," interfaces+=InterfaceName )*
+    keyword=EXTENDS interfaces+=InterfaceName ( => "," interfaces+=InterfaceName )*
 ;
 
-InterfaceBody returns BodyCode:
+InterfaceBody returns DeclarationBody:
     "{" declarations+=InterfaceMemberDeclaration* "}"
 ;
 
@@ -156,7 +156,7 @@ InterfaceMemberDeclaration:
     ConstantDeclaration | AbstractMethodDeclaration
 ;
 
-ConstantDeclaration returns Variable:
+ConstantDeclaration returns Attribute:
     modifiers+=ConstantModifiers* type=Type declarations+=VariableDeclarator
 ;
 
@@ -174,19 +174,19 @@ AbstractMethodModifier:
 ;
 
 ArrayInitializer:
-    "{" ( definitions+=VariableInitializer (=> "," definitions+=VariableInitializer )* )? ","? "}"
+    "{" ( definitions+=VariableInitializer ( => "," definitions+=VariableInitializer )* )? ","? "}"
 ;
 
 // ===============================================
 // ===                  Types                  ===
 // ===============================================
 
-ResultType returns Type:
+ResultType:
     Type | VoidType
 ;
 
-Type returns Type:
-    ( PrimitiveType | ReferenceName ) ( "[]" )*
+Type:
+    TypeSpecifier ( "[]" )*
 ;
 
 TypeSpecifier:
@@ -201,21 +201,21 @@ TypeSpecifier:
     | ObjectType
 ;
 
-PrimitiveType:
-    NumericType  | BooleanType | CharacterType
-;
-
-NumericType:
-    IntegralType | FloatingType
-;
-
-IntegralType:
-    BYTE | SHORT | INT | LONG
-;
-
-FloatingType:
-    FloatType | DoubleType
-;
+//PrimitiveType:
+//    NumericType  | BooleanType | CharacterType
+//;
+//
+//NumericType:
+//    IntegralType | FloatingType
+//;
+//
+//IntegralType:
+//    BYTE | SHORT | INT | LONG
+//;
+//
+//FloatingType:
+//    FloatType | DoubleType
+//;
 
 CharacterType:
     {CharType} name=CHAR
@@ -254,7 +254,7 @@ FloatType:
 ;
 
 IntType:
-    {IntType} name=INT
+    {IntType} name=INTEGER
 ;
 
 // ===============================================
@@ -301,7 +301,7 @@ LabeledStatement:
 
 IfStatement:
     IF "(" condition?=Expression ")" then=Statement
-    (=> ELSE else=Statement )?
+    ( => ELSE else=Statement )?
 ;
 
 SwitchStatement:
@@ -350,8 +350,8 @@ SynchronizedStatement:
 
 TryStatement:
     TRY tryBody=Block
-    (=> CATCH "(" params+=FormalParameter ")" catchesBody+=Block )*
-    (=> FINALLY finallyBody=Block )?
+    ( => CATCH "(" params+=FormalParameter ")" catchesBody+=Block )*
+    ( => FINALLY finallyBody=Block )?
 ;
 
 // ===============================================
@@ -378,17 +378,17 @@ NumericExpression returns Expression:
 ;
 
 BitExpression returns Expression:
-    ( '~' LogicalExpression )
+    ( "~" LogicalExpression )
     | LogicalExpression
     ( {BitExpression.left=current} tokens+=BIT_OPERATOR right=LogicalExpression )*
 ;
 
 LogicalExpression returns Expression:
-    ( '!' TestingExpression )
+    ( "!" TestingExpression )
     | TestingExpression
     ( ( {LogicalExpression.left=current} tokens+=LOGICAL_OPERATOR right=TestingExpression )
-    | ( {LogicalExpression.left=current}  '?' right=TestingExpression
-      {LogicalExpression.ternary=current} ':' else =TestingExpression )
+    | ( {LogicalExpression.left=current}  "?" right=TestingExpression
+      {LogicalExpression.ternary=current} ":" else =TestingExpression )
     | ( {LogicalExpression.left=current} tokens+=INSTANCEOF ClassName ) )*
 ;
 
@@ -400,29 +400,29 @@ TestingExpression returns Expression:
 ;
 
 ArgumentExpression returns Expression:
-    CastingExpression ( ( '(' args+=ArgumentList? ')' )
-    | ( {ArgsExpression.left=current} '.' right=CastingExpression )
-    | ( {ArgsExpression.left=current} '[' right=CastingExpression ']' )
-    | ( {ArgsExpression.left=current} ',' right=CastingExpression  )  )*
+    CastingExpression ( ( => "(" args+=ArgumentList? ")" )
+    | ( {ArgsExpression.left=current} => "." right=CastingExpression )
+    | ( {ArgsExpression.left=current} => "[" right=CastingExpression "]" )
+    | ( {ArgsExpression.left=current} => "," right=CastingExpression  )  )*
 ;
 
 ArgumentList:
-    declarations+=CastingExpression ( "," declarations+=CastingExpression )*
+    declarations+=CastingExpression ( => "," declarations+=CastingExpression )*
 ;
 
 CastingExpression returns Expression:
-    CreatingExpression ( {CastingExpression.left=current} '(' types+=Type ')'
+    CreatingExpression ( {CastingExpression.left=current} => "(" types+=Type ")"
     right=CreatingExpression )*
 ;
 
 CreatingExpression returns Expression:
     ParenthesisExpression
-    ( NEW ( => ( ClassName '(' ( args+=ArgumentList )? ')' )
-    | ( typeSpecifiers+=TypeSpecifier ( => '[' parenthesis+=ParenthesisExpression ']' )? "[]"*
+    ( NEW ( => ( ClassName "(" ( args+=ArgumentList )? ")" )
+    | ( typeSpecifiers+=TypeSpecifier ( => "[" parenthesis+=ParenthesisExpression "]" )? "[]"*
     ) ) )* ;
 
 ParenthesisExpression returns Expression:
-    PrimaryExpression ( '(' parenthesis+=PrimaryExpression ')' )*
+    PrimaryExpression ( => "(" parenthesis+=PrimaryExpression ")" )*
 ;
 
 PrimaryExpression returns Expression:
@@ -435,12 +435,12 @@ PrimaryExpression returns Expression:
 
 PackageName:
     IDENTIFIER
-    (=> "." IDENTIFIER )*
+    ( => "." IDENTIFIER )*
 ;
 
 TypeName:
     IDENTIFIER
-    (=> "." IDENTIFIER )*
+    ( => "." IDENTIFIER )*
 ;
 
 SimpleTypeName:
@@ -449,12 +449,12 @@ SimpleTypeName:
 
 ExpressionName:
     IDENTIFIER
-    (=> "." IDENTIFIER )*
+    ( => "." IDENTIFIER )*
 ;
 
 //MethodName:
 //    IDENTIFIER
-//    (=> "." IDENTIFIER )*
+//    ( => "." IDENTIFIER )*
 //;
 //
 //AmbiguousName:
@@ -492,12 +492,12 @@ Object:
 ;
 
 IntegerLiteral:
-    {IntType} value=( DECIMAL_NUMERAL | HEX_NUMERAL | OCTAL_NUMERAL )
+    value=( DECIMAL_NUMERAL | HEX_NUMERAL | OCTAL_NUMERAL )
     suffix=( "l" | "L" )?
 ;
 
 FloatingLiteral:
-    {FloatType} value=( FloatingFullValue | FloatingPartValue | DECIMAL_NUMERAL )
+    value=( FloatingFullValue | FloatingPartValue | DECIMAL_NUMERAL )
     complement=FloatingComplement? suffix=( "f" | "F" | "d" | "D" )?
 ;
 
@@ -514,31 +514,31 @@ FloatingComplement:
 ;
 
 BooleanLiteral:
-    {BooleanType} value=( TRUE | FALSE )
+    value=( TRUE | FALSE )
 ;
 
 ThisLiteral:
-    {ThisType} value=THIS
+    value=THIS
 ;
 
 SuperLiteral:
-    {SuperType} value=SUPER
+    value=SUPER
 ;
 
 NullLiteral:
-    {NullType} value=NULL
+    value=NULL
 ;
 
 StringLiteral:
-    {ObjectType} value=STRING
+    value=STRING
 ;
 
 CharacterLiteral:
-    {CharType} value=CHARACTER
+    value=CHARACTER
 ;
 
 ObjectLiteral:
-    {ObjectType} value=IDENTIFIER
+    value=IDENTIFIER
 ;
 
 // ===============================================
@@ -558,19 +558,19 @@ terminal WS:
 ;
 
 terminal NUMERIC_OPERATOR:
-    ( '+' | '+=' | '-' | '-=' | '*' | '*=' | '/' | '/=' | '%' | '%=' )
+    ( "+" | "+=" | "-" | "-=" | "*" | "*=" | "/" | "/=" | "%" | "%=" )
 ;
 
 terminal BIT_OPERATOR:
-    ( '>>=' | '<<' | '>>' | '>>>' )
+    ( ">>=" | "<<" | ">>" | ">>>" )
 ;
 
 terminal LOGICAL_OPERATOR:
-    ( "&" | "&=" | '|' | '|=' | '^' | "^=" | "&&" | "||=" | "||" )
+    ( "&" | "&=" | "|" | "|=" | "^" | "^=" | "&&" | "||=" | "||" )
 ;
 
 terminal TESTING_OPERATOR:
-    ( '>' | '<' | '>=' | '<=' | '==' | '!=' )
+    ( ">" | "<" | ">=" | "<=" | "==" | "!=" )
 ;
 
 terminal ABSTRACT:
@@ -677,7 +677,7 @@ terminal INSTANCEOF:
     "instanceof"
 ;
 
-terminal INT:
+terminal INTEGER:
     "int"
 ;
 

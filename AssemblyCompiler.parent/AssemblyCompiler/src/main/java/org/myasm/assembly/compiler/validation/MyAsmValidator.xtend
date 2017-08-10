@@ -9,17 +9,18 @@ import java.util.HashSet
 import java.util.Set
 
 import org.eclipse.xtext.validation.Check
-import org.myasm.assembly.compiler.myAsm.Variable
-import org.myasm.assembly.compiler.myAsm.CompilationUnit
-import org.myasm.assembly.compiler.myAsm.Method
+import org.eclipse.emf.ecore.EObject
 
-import org.myasm.assembly.compiler.myAsm.MyAsmPackage
 import org.myasm.assembly.compiler.myAsm.Attribute
-import org.myasm.assembly.compiler.myAsm.TypeDeclaration
 import org.myasm.assembly.compiler.myAsm.ClassDeclaration
+import org.myasm.assembly.compiler.myAsm.CompilationUnit
 import org.myasm.assembly.compiler.myAsm.InterfaceDeclaration
 import org.myasm.assembly.compiler.myAsm.InterfaceList
-
+import org.myasm.assembly.compiler.myAsm.Method
+import org.myasm.assembly.compiler.myAsm.MyAsmPackage
+import org.myasm.assembly.compiler.myAsm.ObjectType
+import org.myasm.assembly.compiler.myAsm.VariableDeclarator
+import org.myasm.assembly.compiler.myAsm.TypeDeclaration
 
 class MyAsmValidator extends AbstractMyAsmValidator {
 
@@ -29,8 +30,10 @@ class MyAsmValidator extends AbstractMyAsmValidator {
     private Map<String, Set<String>> typeDeclarationExtends;
     private Map<String, Set<String>> typeDeclarationImplements;
 
-    private Map<String, List<Method>>    methods;
-    private Map<String, List<Attribute>> attributes;
+    private Map<String, List<Method>>     methodsType;
+    private Map<String, List<Attribute>>  attributesType;
+
+    private Map<String, Set<String>> attrStr;
     
     @Check
     def programMapper(CompilationUnit program) {
@@ -40,10 +43,11 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         typeDeclarationExtends    = new HashMap<String, Set<String>>();
         typeDeclarationImplements = new HashMap<String, Set<String>>();
 
-        methods    = new HashMap<String, List<Method>>();
-        attributes = new HashMap<String, List<Attribute>>();
+        methodsType    = new HashMap<String, List<Method>>();
+        attributesType = new HashMap<String, List<Attribute>>();
 
         addStringType();
+        attrStr = new HashMap<String, Set<String>>();
 
         for (TypeDeclaration declaration : program.getDeclarations()) {
             if (declaration instanceof ClassDeclaration) {
@@ -52,10 +56,13 @@ class MyAsmValidator extends AbstractMyAsmValidator {
             } else if (declaration instanceof InterfaceDeclaration) {
                 interfaces.add(declaration.name);
             }
-            methods   .put(declaration.name, new ArrayList<Method>());
-            attributes.put(declaration.name, new ArrayList<Attribute>());
+            methodsType   .put(declaration.name, new ArrayList<Method>());
+            attributesType.put(declaration.name, new ArrayList<Attribute>());
 
             typeDeclarationExtends.put(declaration.name, new HashSet<String>());
+
+            attrStr.put(declaration.name, new HashSet<String>());
+            checkAttributeDeclaration(declaration)
         }
     }
 
@@ -105,20 +112,38 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         var InterfaceList interfaceList = declaration.getImplements();
 
         if (interfaceList != null) {
-            for (String strInterface : interfaceList.getInterfaces()) {
-                if (classes.contains(strInterface)) {
-                    error(strInterface + " is a class.", declaration,
+            for (String interfaceName : interfaceList.getInterfaces()) {
+                if (classes.contains(interfaceName)) {
+                    error(interfaceName + " is a class.", declaration,
                     MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
-                } else if (!interfaces.contains(strInterface)) {
-                    error("The interface " + strInterface + " not declared.", declaration,
+                } else if (!interfaces.contains(interfaceName)) {
+                    error("The interface " + interfaceName + " not declared.", declaration,
                     MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
-                } else if (typeDeclarationExtends.get(declaration.name).contains(strInterface)) {
-                    error("The class " + declaration.name + " already implements interface " + strInterface + ".",
+                } else if (typeDeclarationExtends.get(declaration.name).contains(interfaceName)) {
+                    error("The class " + declaration.name + " already implements interface " + interfaceName + ".",
                     declaration, MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
                 } else {
-                    typeDeclarationExtends.get(declaration.name).add(strInterface);
+                    typeDeclarationExtends.get(declaration.name).add(interfaceName);
                 }
             }
+        }
+    }
+
+    @Check
+    def checkInterfaceDeclaration(InterfaceDeclaration declaration) {
+        if (Collections.frequency(interfaces, declaration.name) > 1) {
+            error("The interface " + declaration.name + " already declared.", declaration,
+            MyAsmPackage.Literals.TYPE_DECLARATION__NAME);
+        }
+        var List<String> modifiers = new ArrayList<String>();
+        if (declaration.modifiers != null) {
+            for (String modifier : declaration.modifiers) {
+                modifiers.add(modifier);
+            }
+        }
+        if (Collections.frequency(modifiers, "abstract") > 1) {
+            error("Only one instance abstract modifier is allowed.", declaration,
+            MyAsmPackage.Literals.TYPE_DECLARATION__MODIFIERS);
         }
     }
 
@@ -127,32 +152,55 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         var InterfaceList interfaceList = declaration.getExtends()
 
         if (interfaceList != null) {
-            for (String strInterface : interfaceList.getInterfaces()) {
-                if (classes.contains(strInterface)) {
-                    error(strInterface + " is a class.", declaration,
+            for (String interfaceName : interfaceList.getInterfaces()) {
+                if (classes.contains(interfaceName)) {
+                    error(interfaceName + " is a class.", declaration,
                     MyAsmPackage.Literals.INTERFACE_DECLARATION__EXTENDS);
-                } else if (!interfaces.contains(strInterface)) {
-                    error("The interface " + strInterface + " not declared.", declaration,
+                } else if (!interfaces.contains(interfaceName)) {
+                    error("The interface " + interfaceName + " not declared.", declaration,
                     MyAsmPackage.Literals.INTERFACE_DECLARATION__EXTENDS);
-                } else if (declaration.name.equals(strInterface)) {
+                } else if (declaration.name.equals(interfaceName)) {
                     error("The interface cannot extends itself.", declaration,
                     MyAsmPackage.Literals.INTERFACE_DECLARATION__EXTENDS);
-                } else if (typeDeclarationExtends.get(declaration.name).contains(strInterface)) {
-                    error("The interface " + declaration.name + " already extends interface " + strInterface + ".",
+                } else if (typeDeclarationExtends.get(declaration.name).contains(interfaceName)) {
+                    error("The interface " + declaration.name + " already extends interface " + interfaceName + ".",
                     declaration, MyAsmPackage.Literals.INTERFACE_DECLARATION__EXTENDS);
                 } else {
-                    typeDeclarationExtends.get(declaration.name).add(strInterface);
+                    typeDeclarationExtends.get(declaration.name).add(interfaceName);
                 }
             }
         }
     }
 
+    def checkAttributeDeclaration(TypeDeclaration owner) {
+        for (EObject eObject : owner.body.getDeclarations()) {
+            if (eObject instanceof Attribute) {
+                for (VariableDeclarator declaration : eObject.getDeclarations()) {
+                    if (attrStr.get(owner.name).contains(declaration.facade.name)) {
+                        error("Class attribute " + declaration.facade.name + " already declared.",
+                        declaration, MyAsmPackage.Literals.VARIABLE_DECLARATOR__FACADE);
+                    } else if (eObject.type instanceof ObjectType) {
+                        var ObjectType type = eObject.type as ObjectType;
+
+                        if (attributesType.get(type.name) == null) {
+                            error("Class " + type.name + " unreachable.", eObject,
+                            MyAsmPackage.Literals.INTERFACE_MEMBER_DECLARATION__TYPE);
+                        }
+
+                    }
+                    attrStr.get(owner.name).add(declaration.facade.name)
+                }
+                attributesType.get(owner.name).add(eObject);
+            }
+        }
+    }
+
     @Check
-    def checkVariableDeclarator(Variable variable) {
+    def checkAttributeType(Attribute attribute) {
     }
 
     def addStringType() {
-        methods.put("String", new ArrayList<Method>());
-        attributes.put("String", new ArrayList<Attribute>());
+        methodsType.put("String", new ArrayList<Method>());
+        attributesType.put("String", new ArrayList<Attribute>());
     }
 }
