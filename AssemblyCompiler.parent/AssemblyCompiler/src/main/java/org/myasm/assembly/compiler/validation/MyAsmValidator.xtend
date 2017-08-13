@@ -14,6 +14,7 @@ import org.eclipse.emf.ecore.EObject
 import org.myasm.assembly.compiler.myAsm.Attribute
 import org.myasm.assembly.compiler.myAsm.ClassDeclaration
 import org.myasm.assembly.compiler.myAsm.CompilationUnit
+import org.myasm.assembly.compiler.myAsm.Expression
 import org.myasm.assembly.compiler.myAsm.InterfaceDeclaration
 import org.myasm.assembly.compiler.myAsm.InterfaceList
 import org.myasm.assembly.compiler.myAsm.Method
@@ -21,6 +22,7 @@ import org.myasm.assembly.compiler.myAsm.MyAsmPackage
 import org.myasm.assembly.compiler.myAsm.ObjectType
 import org.myasm.assembly.compiler.myAsm.VariableDeclarator
 import org.myasm.assembly.compiler.myAsm.TypeDeclaration
+import org.myasm.assembly.compiler.myAsm.ArrayInitializer
 
 class MyAsmValidator extends AbstractMyAsmValidator {
 
@@ -69,8 +71,8 @@ class MyAsmValidator extends AbstractMyAsmValidator {
     @Check
     def checkClassDeclaration(ClassDeclaration declaration) {
         if (Collections.frequency(classes, declaration.name) > 1) {
-            error("The class " + declaration.name + " already declared.", declaration,
-            MyAsmPackage.Literals.TYPE_DECLARATION__NAME);
+            error("The class " + declaration.name + " already declared.",
+            declaration, MyAsmPackage.Literals.TYPE_DECLARATION__NAME);
         }
         var List<String> modifiers = new ArrayList<String>();
         if (declaration.modifiers != null) {
@@ -79,8 +81,8 @@ class MyAsmValidator extends AbstractMyAsmValidator {
             }
         }
         if (modifiers.contains("abstract") && modifiers.contains("final")) {
-            error("Only one of the modifiers can be used: abstract or final.", declaration,
-            MyAsmPackage.Literals.TYPE_DECLARATION__MODIFIERS);
+            error("Only one of the modifiers can be used: abstract or final.",
+            declaration, MyAsmPackage.Literals.TYPE_DECLARATION__MODIFIERS);
         } else if (Collections.frequency(modifiers, "abstract") > 1 || Collections.frequency(modifiers, "final") > 1) {
             error("Only one instance of the final or abstract modifier is allowed.", declaration,
             MyAsmPackage.Literals.TYPE_DECLARATION__MODIFIERS);
@@ -96,8 +98,8 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 error(superClassName + " is a interface.", declaration,
                 MyAsmPackage.Literals.CLASS_DECLARATION__EXTENDS);
             } else if (!classes.contains(superClassName)) {
-                error("The class " + superClassName + " not declared.", declaration,
-                MyAsmPackage.Literals.CLASS_DECLARATION__EXTENDS);
+                error("The class " + superClassName + " not declared.",
+                declaration, MyAsmPackage.Literals.CLASS_DECLARATION__EXTENDS);
             } else if (declaration.name.equals(superClassName)) {
                 error("The class cannot extends itself.", declaration,
                 MyAsmPackage.Literals.CLASS_DECLARATION__EXTENDS);
@@ -117,8 +119,8 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                     error(interfaceName + " is a class.", declaration,
                     MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
                 } else if (!interfaces.contains(interfaceName)) {
-                    error("The interface " + interfaceName + " not declared.", declaration,
-                    MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
+                    error("The interface " + interfaceName + " not declared.",
+                    declaration, MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
                 } else if (typeDeclarationExtends.get(declaration.name).contains(interfaceName)) {
                     error("The class " + declaration.name + " already implements interface " + interfaceName + ".",
                     declaration, MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
@@ -132,8 +134,8 @@ class MyAsmValidator extends AbstractMyAsmValidator {
     @Check
     def checkInterfaceDeclaration(InterfaceDeclaration declaration) {
         if (Collections.frequency(interfaces, declaration.name) > 1) {
-            error("The interface " + declaration.name + " already declared.", declaration,
-            MyAsmPackage.Literals.TYPE_DECLARATION__NAME);
+            error("The interface " + declaration.name + " already declared.",
+            declaration, MyAsmPackage.Literals.TYPE_DECLARATION__NAME);
         }
         var List<String> modifiers = new ArrayList<String>();
         if (declaration.modifiers != null) {
@@ -157,8 +159,8 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                     error(interfaceName + " is a class.", declaration,
                     MyAsmPackage.Literals.INTERFACE_DECLARATION__EXTENDS);
                 } else if (!interfaces.contains(interfaceName)) {
-                    error("The interface " + interfaceName + " not declared.", declaration,
-                    MyAsmPackage.Literals.INTERFACE_DECLARATION__EXTENDS);
+                    error("The interface " + interfaceName + " not declared.",
+                    declaration, MyAsmPackage.Literals.INTERFACE_DECLARATION__EXTENDS);
                 } else if (declaration.name.equals(interfaceName)) {
                     error("The interface cannot extends itself.", declaration,
                     MyAsmPackage.Literals.INTERFACE_DECLARATION__EXTENDS);
@@ -183,8 +185,8 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                         var ObjectType type = eObject.type as ObjectType;
 
                         if (attributesType.get(type.name) == null) {
-                            error("Class " + type.name + " unreachable.", eObject,
-                            MyAsmPackage.Literals.INTERFACE_MEMBER_DECLARATION__TYPE);
+                            error("Attribute type " + type.name + " unreachable.", eObject,
+                            MyAsmPackage.Literals.ATTRIBUTE__TYPE);
                         }
 
                     }
@@ -197,6 +199,36 @@ class MyAsmValidator extends AbstractMyAsmValidator {
 
     @Check
     def checkAttributeType(Attribute attribute) {
+        switch (attribute.type.eClass.name) {
+            case "IntType"    : {
+                checkAttributeType(attribute, "int");
+            }
+            case "LongType"   : {
+                checkAttributeType(attribute, "int", "long");
+            }
+            case "FloatType"  : {
+                checkAttributeType(attribute, "int", "long", "float");
+            }
+            case "DoubleType" : {
+                checkAttributeType(attribute, "int", "long", "float", "double");
+            }
+            case "BooleanType": {
+                checkAttributeType(attribute, "boolean");
+            }
+            case "ObjectType" : {
+                var ObjectType type = attribute.type as ObjectType;
+                checkAttributeType(attribute, type.name);
+            }
+            default: {
+
+            }
+        }
+
+    }
+
+    def checkAttributeType (Attribute attribute, String... types) {
+        for (VariableDeclarator declaration : attribute.getDeclarations()) {
+        }
     }
 
     def addStringType() {

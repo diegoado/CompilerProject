@@ -33,12 +33,16 @@ TypeDeclaration:
 ;
 
 ClassDeclaration:
-    modifiers+=ClassModifier*
+    visibility=PUBLIC? modifiers+=ClassModifier*
     CLASS name=IDENTIFIER extends=SuperClass? implements=Interfaces? body=ClassBody
 ;
 
+VisibilityModifier:
+    PUBLIC | PROTECTED | PRIVATE
+;
+
 ClassModifier:
-    PUBLIC | ABSTRACT | FINAL
+    ABSTRACT | FINAL
 ;
 
 SuperClass:
@@ -66,16 +70,12 @@ StaticInitializer:
 ;
 
 ConstructorDeclaration:
-    modifiers+=ConstructorModifier*
+    visibility=VisibilityModifier?
     header=ConstructorDeclarator throws=Exceptions? body=ConstructorBody
 ;
 
-ConstructorModifier:
-    PUBLIC | PROTECTED | PRIVATE
-;
-
 ConstructorDeclarator:
-    name=SimpleTypeName
+    name=IDENTIFIER
     "(" ( params+=FormalParameter ( => "," params+=FormalParameter )* )? ")"
 ;
 
@@ -95,13 +95,17 @@ ExplicitConstructorInvocation:
     ( keyword=THIS "(" args=ArgumentList? ")" ) | ( keyword=SUPER "(" args=ArgumentList? ")" )
 ;
 
+ArgumentList:
+    declarations+=Expression ( => "," declarations+=Expression )*
+;
+
 FieldDeclaration returns Attribute:
-    modifiers+=FieldModifier*
+    visibility=VisibilityModifier? modifiers+=FieldModifier*
     type=Type declarations+=VariableDeclarator ( => "," declarations+=VariableDeclarator )* ";"
 ;
 
 FieldModifier:
-    PUBLIC | PROTECTED | PRIVATE | STATIC | FINAL | TRANSIENT | VOLATILE
+    STATIC | FINAL | TRANSIENT | VOLATILE
 ;
 
 VariableDeclarator:
@@ -117,17 +121,17 @@ VariableInitializer:
     Expression | ArrayInitializer
 ;
 
-MethodDeclaration:
-    signature=MethodHeader ( body=Block | ";" )
+MethodDeclaration returns Method:
+    signature=MethodHeader body=MethodBody
 ;
 
-MethodHeader returns Method:
-    modifiers+=MethodModifier*
+MethodHeader:
+    visibility=VisibilityModifier? modifiers+=MethodModifier*
     type=ResultType header=MethodDeclarator throws=Exceptions?
 ;
 
 MethodModifier:
-    PUBLIC | PROTECTED | PRIVATE | STATIC | ABSTRACT | FINAL | SYNCHRONIZED | NATIVE
+    STATIC | ABSTRACT | FINAL | SYNCHRONIZED | NATIVE
 ;
 
 MethodDeclarator:
@@ -135,13 +139,13 @@ MethodDeclarator:
     "(" ( params+=FormalParameter ( => "," params+=FormalParameter)* )? ")"
 ;
 
-InterfaceDeclaration:
-    modifiers+=InterfaceModifier*
-    INTERFACE name=IDENTIFIER extends=ExtendsInterfaces? body=InterfaceBody
+MethodBody:
+    Block | ";"
 ;
 
-InterfaceModifier:
-    PUBLIC | ABSTRACT
+InterfaceDeclaration:
+    visibility=PUBLIC? modifiers+=ABSTRACT?
+    INTERFACE name=IDENTIFIER extends=ExtendsInterfaces? body=InterfaceBody
 ;
 
 ExtendsInterfaces returns InterfaceList:
@@ -157,20 +161,21 @@ InterfaceMemberDeclaration:
 ;
 
 ConstantDeclaration returns Attribute:
-    modifiers+=ConstantModifiers* type=Type declarations+=VariableDeclarator
+    visibility=VisibilityModifier? modifiers+=ConstantModifiers*
+    type=Type declarations+=VariableDeclarator
 ;
 
 ConstantModifiers:
-    PUBLIC | STATIC | FINAL
+    STATIC | FINAL
 ;
 
 AbstractMethodDeclaration returns Method:
-    modifiers+=AbstractMethodModifier*
-    type=ResultType header=MethodDeclarator throws=Exceptions? ";"
+    signature=AbstractMethodHeader ";"
 ;
 
-AbstractMethodModifier:
-    PUBLIC | ABSTRACT
+AbstractMethodHeader:
+    visibility=PUBLIC? modifiers+=ABSTRACT?
+    type=ResultType header=MethodDeclarator throws=Exceptions?
 ;
 
 ArrayInitializer:
@@ -200,22 +205,6 @@ TypeSpecifier:
     | CharacterType
     | ObjectType
 ;
-
-//PrimitiveType:
-//    NumericType  | BooleanType | CharacterType
-//;
-//
-//NumericType:
-//    IntegralType | FloatingType
-//;
-//
-//IntegralType:
-//    BYTE | SHORT | INT | LONG
-//;
-//
-//FloatingType:
-//    FloatType | DoubleType
-//;
 
 CharacterType:
     {CharType} name=CHAR
@@ -261,7 +250,7 @@ IntType:
 // ===          Blocks and Commands            ===
 // ===============================================
 
-Block:
+Block returns DeclarationBody:
     "{" declarations+=BlockStatement* "}"
 ;
 
@@ -359,74 +348,98 @@ TryStatement:
 // ===============================================
 
 Expression:
-    NumericExpression | Assignment
-;
-
-Assignment returns Assignment:
-    object=ReferencedObject token="=" expression=Expression
-;
-
-ReferencedObject:
-    => ExpressionName /*| => FieldAccess | => ArrayAccess*/
+        NumericExpression
 ;
 
 NumericExpression returns Expression:
-    ( "++" | "--" | "-" ) BitExpression
-    | BitExpression
-    ( postfixToken=( "++" | "--" )
-    | ( {Expression.left=current} tokens+=NUMERIC_OPERATOR right=BitExpression )* )
+      => PrefixNumericExpression
+    | => PosfixNumericExpression
+    | => ( BitExpression ( {NumericExpression.left=current}
+    operator=( "+" | "+=" | "-" | "-=" | "*" | "*=" | "/" | "/=" | "%" | "%=" ) right=BitExpression )* )
+;
+
+PrefixNumericExpression:
+    operator=( "++" | "--" | "+" | "-" ) right=BitExpression
+;
+
+PosfixNumericExpression:
+    left=BitExpression operator=( "++" | "--" )
 ;
 
 BitExpression returns Expression:
-    ( "~" LogicalExpression )
-    | LogicalExpression
-    ( {BitExpression.left=current} tokens+=BIT_OPERATOR right=LogicalExpression )*
+      => PrefixBitExpression
+    | => ( LogicalExpression ( {BitExpression.left=current}
+    operator=( ">>=" | "<<" | ">>" | ">>>" ) right=LogicalExpression )* )
+;
+
+PrefixBitExpression:
+    operator="~" right=LogicalExpression
 ;
 
 LogicalExpression returns Expression:
-    ( "!" TestingExpression )
-    | TestingExpression
-    ( ( {LogicalExpression.left=current} tokens+=LOGICAL_OPERATOR right=TestingExpression )
-    | ( {LogicalExpression.left=current}  "?" right=TestingExpression
-      {LogicalExpression.ternary=current} ":" else =TestingExpression )
-    | ( {LogicalExpression.left=current} tokens+=INSTANCEOF ClassName ) )*
+      => PrefixLogicalExpression
+    | => ( TestingExpression
+    ( {LogicalExpression.left=current}
+    operator=( "&" | "&=" | "|" | "|=" | "^" | "^=" | "&&" | "||=" | "||" )
+    right=TestingExpression )* )
+    | => ( TestingExpression
+    ( ( {LogicalExpression.left=current} "?" right=TestingExpression
+    { LogicalExpression.ternary=current} ":" ternary=TestingExpression )
+    | ( {LogicalExpression.left=current}
+    operator=INSTANCEOF class=ObjectType ) )? )
+;
+
+PrefixLogicalExpression:
+    operator="!" right=TestingExpression
 ;
 
 TestingExpression returns Expression:
-    ArgumentExpression
-    ( {TestingExpression.left=current} tokens+=TESTING_OPERATOR right=ArgumentExpression )*
-//    | {TestingExpression} => TRUE
-//    | {TestingExpression} => FALSE
+    CastExpression
+    ( {TestingExpression.left=current}
+    operator=( ">" | "<" | ">=" | "<=" | "==" | "!=" ) right=CastExpression )*
 ;
 
-ArgumentExpression returns Expression:
-    CastingExpression ( ( => "(" args+=ArgumentList? ")" )
-    | ( {ArgsExpression.left=current} => "." right=CastingExpression )
-    | ( {ArgsExpression.left=current} => "[" right=CastingExpression "]" )
-    | ( {ArgsExpression.left=current} => "," right=CastingExpression  )  )*
+CastExpression:
+    => ( "(" types+=TypeSpecifier ")" )* expression=PrimaryExpression
 ;
 
-ArgumentList:
-    declarations+=CastingExpression ( => "," declarations+=CastingExpression )*
+PrimaryExpression:
+    => PrimaryNoNewArray | PrimaryNewArray
 ;
 
-CastingExpression returns Expression:
-    CreatingExpression ( {CastingExpression.left=current} => "(" types+=Type ")"
-    right=CreatingExpression )*
+PrimaryNoNewArray returns PrimaryExpression:
+    ( Primary | CreatingExpression | MethodInvocation | ParenthesisExpression )
+    => ( ( "." fields+=IDENTIFIER ( "(" args+=ArgumentList? ")" )? ) | ( "[" dimensions+=Expression "]" ) )*
 ;
 
-CreatingExpression returns Expression:
-    ParenthesisExpression
-    ( NEW ( => ( ClassName "(" ( args+=ArgumentList )? ")" )
-    | ( typeSpecifiers+=TypeSpecifier ( => "[" parenthesis+=ParenthesisExpression "]" )? "[]"*
-    ) ) )* ;
-
-ParenthesisExpression returns Expression:
-    PrimaryExpression ( => "(" parenthesis+=PrimaryExpression ")" )*
+PrimaryNewArray returns PrimaryExpression:
+    ArrayCreationExpression
+    => ( ( "." fields+=IDENTIFIER ( "(" args+=ArgumentList? ")" )? ) | ( "[" dimensions+=Expression "]" ) )*
 ;
 
-PrimaryExpression returns Expression:
-    primary=( Literal | Object )
+Primary:
+    Literal | Reference
+;
+
+CreatingExpression:
+    ClassInstanceCreationExpression | ArrayCreationExpression
+;
+
+ParenthesisExpression:
+    => "(" Expression ")"
+;
+
+MethodInvocation:
+    => method=MethodName "(" args+=ArgumentList? ")"
+;
+
+ClassInstanceCreationExpression:
+    NEW type=ObjectType "(" args+=ArgumentList? ")"
+;
+
+ArrayCreationExpression:
+    NEW type=TypeSpecifier
+    ( => "[" dimensions+=Expression "]" )+ layers+=( "[]" )*
 ;
 
 // ===============================================
@@ -443,27 +456,9 @@ TypeName:
     ( => "." IDENTIFIER )*
 ;
 
-SimpleTypeName:
-    IDENTIFIER
-;
-
-ExpressionName:
+MethodName:
     IDENTIFIER
     ( => "." IDENTIFIER )*
-;
-
-//MethodName:
-//    IDENTIFIER
-//    ( => "." IDENTIFIER )*
-//;
-//
-//AmbiguousName:
-//    IDENTIFIER
-//    ( => "." IDENTIFIER )*
-//;
-
-ReferenceName:
-    TypeName
 ;
 
 ClassName:
@@ -487,7 +482,7 @@ Literal:
     | NullLiteral
 ;
 
-Object:
+Reference:
     ThisLiteral | SuperLiteral | ObjectLiteral
 ;
 
@@ -557,21 +552,21 @@ terminal WS:
     ( " " | "\t" | "\r" | "\n" )+
 ;
 
-terminal NUMERIC_OPERATOR:
-    ( "+" | "+=" | "-" | "-=" | "*" | "*=" | "/" | "/=" | "%" | "%=" )
-;
+//terminal NUMERIC_OPERATOR:
+//    ( "+" | "+=" | "-" | "-=" | "*" | "*=" | "/" | "/=" | "%" | "%=" )
+//;
 
-terminal BIT_OPERATOR:
-    ( ">>=" | "<<" | ">>" | ">>>" )
-;
+//terminal BIT_OPERATOR:
+//    ( ">>=" | "<<" | ">>" | ">>>" )
+//;
 
-terminal LOGICAL_OPERATOR:
-    ( "&" | "&=" | "|" | "|=" | "^" | "^=" | "&&" | "||=" | "||" )
-;
+//terminal LOGICAL_OPERATOR:
+//    ( "&" | "&=" | "|" | "|=" | "^" | "^=" | "&&" | "||=" | "||" )
+//;
 
-terminal TESTING_OPERATOR:
-    ( ">" | "<" | ">=" | "<=" | "==" | "!=" )
-;
+//terminal TESTING_OPERATOR:
+//    ( ">" | "<" | ">=" | "<=" | "==" | "!=" )
+//;
 
 terminal ABSTRACT:
     "abstract"
