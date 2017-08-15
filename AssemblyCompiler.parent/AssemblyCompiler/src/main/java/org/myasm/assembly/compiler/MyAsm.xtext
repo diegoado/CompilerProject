@@ -54,7 +54,7 @@ Interfaces returns InterfaceList:
 ;
 
 ClassBody returns DeclarationBody:
-    "{" declarations+=ClassBodyDeclaration* "}"
+    leftCurlyBrace="{" declarations+=ClassBodyDeclaration* rightCurlyBrace="}"
 ;
 
 ClassBodyDeclaration:
@@ -88,7 +88,8 @@ Exceptions:
 ;
 
 ConstructorBody returns DeclarationBody:
-    "{" invocation=ExplicitConstructorInvocation? => declarations+=BlockStatement* "}"
+    leftCurlyBrace="{" invocation=ExplicitConstructorInvocation?
+    => declarations+=BlockStatement* rightCurlyBrace="}"
 ;
 
 ExplicitConstructorInvocation:
@@ -125,7 +126,7 @@ MethodDeclaration returns Method:
     signature=MethodHeader body=MethodBody
 ;
 
-MethodHeader:
+MethodHeader returns MethodHeader:
     visibility=VisibilityModifier? modifiers+=MethodModifier*
     type=ResultType header=MethodDeclarator throws=Exceptions?
 ;
@@ -153,7 +154,7 @@ ExtendsInterfaces returns InterfaceList:
 ;
 
 InterfaceBody returns DeclarationBody:
-    "{" declarations+=InterfaceMemberDeclaration* "}"
+    leftCurlyBrace="{" declarations+=InterfaceMemberDeclaration* rightCurlyBrace="}"
 ;
 
 InterfaceMemberDeclaration:
@@ -173,7 +174,7 @@ AbstractMethodDeclaration returns Method:
     signature=AbstractMethodHeader ";"
 ;
 
-AbstractMethodHeader:
+AbstractMethodHeader returns MethodHeader:
     visibility=PUBLIC? modifiers+=ABSTRACT?
     type=ResultType header=MethodDeclarator throws=Exceptions?
 ;
@@ -251,7 +252,7 @@ IntType:
 // ===============================================
 
 Block returns DeclarationBody:
-    "{" declarations+=BlockStatement* "}"
+    leftCurlyBrace="{" declarations+=BlockStatement* rightCurlyBrace="}"
 ;
 
 BlockStatement:
@@ -269,7 +270,8 @@ Statement:
     | WhileStatement
     | ForStatement
     | Block
-    | ( Expression ";" )
+    | => Expression ";"
+    | => AssignmentStatement ";"
     | SwitchStatement
     | DoStatement
     | BreakStatement
@@ -317,6 +319,11 @@ ForInit:
     Expression | LocalVariableDeclaration
 ;
 
+AssignmentStatement:
+    left=LeftHandAssignmentSide
+    operator=( "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "||=" | ">>=" ) right=Expression
+;
+
 BreakStatement:
     BREAK    reference=IDENTIFIER? ";"
 ;
@@ -347,40 +354,44 @@ TryStatement:
 // ===                 Expression              ===
 // ===============================================
 
+LeftHandAssignmentSide:
+    => ExpressionName /*| => FieldAccess | => ArrayAccess*/
+;
+
 Expression:
-        NumericExpression
+    NumericExpression
 ;
 
 NumericExpression returns Expression:
       => PrefixNumericExpression
     | => PosfixNumericExpression
     | => ( BitExpression ( {NumericExpression.left=current}
-    operator=( "+" | "+=" | "-" | "-=" | "*" | "*=" | "/" | "/=" | "%" | "%=" ) right=BitExpression )* )
+    operator=( "+" | "-" | "*" | "/" | "%" ) right=BitExpression )* )
 ;
 
 PrefixNumericExpression:
-    operator=( "++" | "--" | "+" | "-" ) right=BitExpression
+    {NumericExpression} operator=( "++" | "--" | "+" | "-" ) right=BitExpression
 ;
 
 PosfixNumericExpression:
-    left=BitExpression operator=( "++" | "--" )
+    {NumericExpression} left=BitExpression operator=( "++" | "--" )
 ;
 
 BitExpression returns Expression:
       => PrefixBitExpression
     | => ( LogicalExpression ( {BitExpression.left=current}
-    operator=( ">>=" | "<<" | ">>" | ">>>" ) right=LogicalExpression )* )
+    operator=( "<<" | ">>" | ">>>" ) right=LogicalExpression )* )
 ;
 
 PrefixBitExpression:
-    operator="~" right=LogicalExpression
+    {BitExpression} operator="~" right=LogicalExpression
 ;
 
 LogicalExpression returns Expression:
       => PrefixLogicalExpression
     | => ( TestingExpression
     ( {LogicalExpression.left=current}
-    operator=( "&" | "&=" | "|" | "|=" | "^" | "^=" | "&&" | "||=" | "||" )
+    operator=( "&" | "|" | "^" | "&&" | "||" )
     right=TestingExpression )* )
     | => ( TestingExpression
     ( ( {LogicalExpression.left=current} "?" right=TestingExpression
@@ -390,7 +401,7 @@ LogicalExpression returns Expression:
 ;
 
 PrefixLogicalExpression:
-    operator="!" right=TestingExpression
+    {LogicalExpression} operator="!" right=TestingExpression
 ;
 
 TestingExpression returns Expression:
@@ -408,7 +419,10 @@ PrimaryExpression:
 ;
 
 PrimaryNoNewArray returns PrimaryExpression:
-    ( Primary | CreatingExpression | MethodInvocation | ParenthesisExpression )
+    ( => MethodInvocation
+    | => Primary
+    | CreatingExpression
+    | ParenthesisExpression )
     => ( ( "." fields+=IDENTIFIER ( "(" args+=ArgumentList? ")" )? ) | ( "[" dimensions+=Expression "]" ) )*
 ;
 
@@ -430,7 +444,7 @@ ParenthesisExpression:
 ;
 
 MethodInvocation:
-    => method=MethodName "(" args+=ArgumentList? ")"
+    method=MethodName   "(" args+=ArgumentList? ")"
 ;
 
 ClassInstanceCreationExpression:
@@ -461,6 +475,11 @@ MethodName:
     ( => "." IDENTIFIER )*
 ;
 
+ExpressionName:
+    IDENTIFIER
+    (=> "." IDENTIFIER )*
+;
+
 ClassName:
     TypeName
 ;
@@ -474,8 +493,9 @@ InterfaceName:
 // ===============================================
 
 Literal:
-     => IntegerLiteral
-    |=> FloatingLiteral
+      => IntegerLiteral
+    | => FloatingLiteral
+    | => FloatingIntLiteral
     | BooleanLiteral
     | CharacterLiteral
     | StringLiteral
@@ -487,25 +507,25 @@ Reference:
 ;
 
 IntegerLiteral:
-    value=( DECIMAL_NUMERAL | HEX_NUMERAL | OCTAL_NUMERAL )
-    suffix=( "l" | "L" )?
+    value=( DECIMAL_DIGITS | HEXA_DIGITS ) => suffix=( "l" | "L" )?
 ;
 
 FloatingLiteral:
-    value=( FloatingFullValue | FloatingPartValue | DECIMAL_NUMERAL )
-    complement=FloatingComplement? suffix=( "f" | "F" | "d" | "D" )?
+    value=( FloatingFullValue | FloatingPartValue )
+    => complement=EXPOENT_PART? suffix=( "f" | "F" | "d" | "D" )?
 ;
 
-FloatingFullValue :
-    => DECIMAL_NUMERAL "." DECIMAL_NUMERAL*
+FloatingIntLiteral:
+    {FloatingLiteral} value=DECIMAL_DIGITS
+    => ( complement=EXPOENT_PART suffix=( "f" | "F" | "d" | "D" ) ) | complement=EXPOENT_PART | suffix=( "f" | "F" | "d" | "D" )
 ;
 
-FloatingPartValue :
-    => "." DECIMAL_NUMERAL
+FloatingFullValue:
+    => DECIMAL_DIGITS "." DECIMAL_DIGITS?
 ;
 
-FloatingComplement:
-    ( "e" | "E" ) ( "+" | "-" ) DECIMAL_NUMERAL+
+FloatingPartValue:
+    => "." DECIMAL_DIGITS
 ;
 
 BooleanLiteral:
@@ -551,22 +571,6 @@ terminal SL_COMMENT:
 terminal WS:
     ( " " | "\t" | "\r" | "\n" )+
 ;
-
-//terminal NUMERIC_OPERATOR:
-//    ( "+" | "+=" | "-" | "-=" | "*" | "*=" | "/" | "/=" | "%" | "%=" )
-//;
-
-//terminal BIT_OPERATOR:
-//    ( ">>=" | "<<" | ">>" | ">>>" )
-//;
-
-//terminal LOGICAL_OPERATOR:
-//    ( "&" | "&=" | "|" | "|=" | "^" | "^=" | "&&" | "||=" | "||" )
-//;
-
-//terminal TESTING_OPERATOR:
-//    ( ">" | "<" | ">=" | "<=" | "==" | "!=" )
-//;
 
 terminal ABSTRACT:
     "abstract"
@@ -775,37 +779,21 @@ terminal WHILE:
     "while"
 ;
 
+terminal EXPOENT_PART:
+    ( "e" | "E" ) ( "+" | "-" ) DECIMAL_DIGITS
+;
+
+terminal HEXA_DIGITS:
+    ( "0x" | "0X" ) ( "0".."9" "a".."f" "A".."F" )*
+;
+
+terminal DECIMAL_DIGITS:
+    ( "0".."9" )+
+;
+
 terminal IDENTIFIER:
     ( "a".."z" | "A".."Z" |"_" |"$" )
     ( "a".."z" | "A".."Z" |"_" |"$" | "0".."9" )*
-;
-
-terminal DECIMAL_NUMERAL:
-    "0" | ( NON_ZERO_DIGIT DIGIT* )
-;
-
-terminal fragment DIGIT:
-    "0" | NON_ZERO_DIGIT
-;
-
-terminal fragment NON_ZERO_DIGIT:
-    "1" .. "9"
-;
-
-terminal HEX_NUMERAL:
-    ( "0x" | "0X" ) HEX_DIGIT+
-;
-
-terminal fragment HEX_DIGIT:
-    "0" .. "9" | "a" .. "f" | "A" .. "F"
-;
-
-terminal OCTAL_NUMERAL:
-    "0" OCTAL_DIGIT+
-;
-
-terminal fragment OCTAL_DIGIT:
-    "0" .. "7"
 ;
 
 terminal CHARACTER:
