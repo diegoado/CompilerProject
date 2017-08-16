@@ -35,6 +35,7 @@ import org.myasm.assembly.compiler.myAsm.VariableDeclarator
 import org.myasm.assembly.compiler.myAsm.TypeDeclaration
 import org.myasm.assembly.compiler.myAsm.LogicalExpression
 import org.myasm.assembly.compiler.myAsm.TestingExpression
+import org.myasm.assembly.compiler.myAsm.SwitchStatement
 
 class MyAsmValidator extends AbstractMyAsmValidator {
 
@@ -313,6 +314,21 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 MyAsmPackage.Literals.INTERFACE_LIST__INTERFACES);
             }
         }
+    }
+
+    @Check
+    def checkSwitchCase(SwitchStatement switchStatement){
+        var String tipoDaExpressao = (switchStatement.expression as CastExpression).expression.eClass.name
+        for (Expression expressao : switchStatement.getConstants()){
+            var String tipoDaExpressaoCase = (expressao as CastExpression).expression.eClass.name
+            System.out.println(tipoDaExpressao + "-" +tipoDaExpressaoCase);
+            if (!isCompatibleType(tipoDaExpressao, tipoDaExpressaoCase)){
+                error("Type mismatch. Expected: "+tipoDaExpressao + ". Found: "+ tipoDaExpressaoCase,
+                expressao,
+                MyAsmPackage.Literals.CAST_EXPRESSION__TYPES);
+            }
+        }
+
     }
 
     def checkMethodHeader(String clazz, MethodDeclarator header) {
