@@ -321,7 +321,6 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         var String tipoDaExpressao = (switchStatement.expression as CastExpression).expression.eClass.name
         for (Expression expressao : switchStatement.getConstants()){
             var String tipoDaExpressaoCase = (expressao as CastExpression).expression.eClass.name
-            System.out.println(tipoDaExpressao + "-" +tipoDaExpressaoCase);
             if (!isCompatibleType(tipoDaExpressao, tipoDaExpressaoCase)){
                 error("Type mismatch. Expected: "+tipoDaExpressao + ". Found: "+ tipoDaExpressaoCase,
                 expressao,
