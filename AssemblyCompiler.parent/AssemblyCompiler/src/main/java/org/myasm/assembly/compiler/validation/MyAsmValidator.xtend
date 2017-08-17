@@ -16,25 +16,32 @@ import org.eclipse.emf.ecore.EObject
 
 import org.myasm.assembly.compiler.myAsm.ArrayInitializer
 import org.myasm.assembly.compiler.myAsm.Attribute
+import org.myasm.assembly.compiler.myAsm.AssignmentStatement
 import org.myasm.assembly.compiler.myAsm.CastExpression
 import org.myasm.assembly.compiler.myAsm.ClassDeclaration
 import org.myasm.assembly.compiler.myAsm.ClassInstanceCreationExpression
 import org.myasm.assembly.compiler.myAsm.CompilationUnit
+import org.myasm.assembly.compiler.myAsm.DeclarationBody
 import org.myasm.assembly.compiler.myAsm.Expression
 import org.myasm.assembly.compiler.myAsm.FormalParameter
 import org.myasm.assembly.compiler.myAsm.FloatingIntLiteral
 import org.myasm.assembly.compiler.myAsm.InterfaceDeclaration
 import org.myasm.assembly.compiler.myAsm.IntegerLiteral
+import org.myasm.assembly.compiler.myAsm.LogicalExpression
 import org.myasm.assembly.compiler.myAsm.Method
 import org.myasm.assembly.compiler.myAsm.MethodDeclarator
 import org.myasm.assembly.compiler.myAsm.MethodInvocation
 import org.myasm.assembly.compiler.myAsm.MyAsmPackage
 import org.myasm.assembly.compiler.myAsm.NumericExpression
+import org.myasm.assembly.compiler.myAsm.ObjectLiteral
 import org.myasm.assembly.compiler.myAsm.ObjectType
+import org.myasm.assembly.compiler.myAsm.Variable
 import org.myasm.assembly.compiler.myAsm.VariableDeclarator
-import org.myasm.assembly.compiler.myAsm.TypeDeclaration
-import org.myasm.assembly.compiler.myAsm.LogicalExpression
 import org.myasm.assembly.compiler.myAsm.TestingExpression
+import org.myasm.assembly.compiler.myAsm.TypeDeclaration
+import org.myasm.assembly.compiler.myAsm.ReturnStatement
+import org.myasm.assembly.compiler.myAsm.SwitchStatement
+import org.myasm.assembly.compiler.myAsm.VariableInitializer
 
 class MyAsmValidator extends AbstractMyAsmValidator {
 
@@ -46,9 +53,10 @@ class MyAsmValidator extends AbstractMyAsmValidator {
 
     private Map<String, List<Method>>    methods;
     private Map<String, List<Attribute>> attributes;
+    private Map<String, Set<Method>> inheritedMethods;
 
     private List<String> finalCls;
-    private Map<String, Set<String>> attributesN;
+    private Map<String, Set<String>> attrScope;
     
     @Check
     def programMapper(CompilationUnit program) {
@@ -60,9 +68,10 @@ class MyAsmValidator extends AbstractMyAsmValidator {
 
         methods = new HashMap<String, List<Method>>();
         attributes = new HashMap<String, List<Attribute>>();
+        inheritedMethods = new HashMap<String, Set<Method>>();
 
-        finalCls = new ArrayList<String>();
-        attributesN = new HashMap<String, Set<String>>();
+        finalCls  = new ArrayList<String>();
+        attrScope = new HashMap<String, Set<String>>();
 
         addStringType();
         for (TypeDeclaration declaration : program.getDeclarations()) {
@@ -70,13 +79,14 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 classes.add(declaration.name);
                 implemented.put(declaration.name, new HashSet<String>());
             } else if (declaration instanceof InterfaceDeclaration) {
-                interfaces.add(declaration.name);
+                interfaces .add(declaration.name);
             }
             methods   .put(declaration.name, new ArrayList<Method>());
             attributes.put(declaration.name, new ArrayList<Attribute>());
+            inheritedMethods.put(declaration.name, new TreeSet<Method>(getMethodComparator()));
 
-            extended   .put(declaration.name, new HashSet<String>());
-            attributesN.put(declaration.name, new HashSet<String>());
+            extended .put(declaration.name, new HashSet<String>());
+            attrScope.put(declaration.name, new HashSet<String>());
         }
     }
 
@@ -105,6 +115,20 @@ class MyAsmValidator extends AbstractMyAsmValidator {
     }
 
     @Check
+    def checkInterfaceDeclaration(InterfaceDeclaration declaration) {
+        if (Collections.frequency(interfaces, declaration.name) > 1) {
+            error("The interface " + declaration.name + " already declared.",
+            declaration,
+            MyAsmPackage.Literals.TYPE_DECLARATION__NAME);
+        }
+        if (declaration.modifiers != null && Collections.frequency(declaration.modifiers, "abstract") > 1) {
+            error("Only one instance abstract modifier is allowed.",
+            declaration,
+            MyAsmPackage.Literals.TYPE_DECLARATION__MODIFIERS);
+        }
+    }
+
+    @Check
     def checkClassExtends(ClassDeclaration clazz) {
         if (clazz.getExtends() != null) {
             val superClass = clazz.getExtends().name;
@@ -122,45 +146,8 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 MyAsmPackage.Literals.CLASS_DECLARATION__EXTENDS);
             } else {
                 extended.get(clazz.name).add(superClass);
+                addInheritedMethods(superClass, clazz.name);
             }
-        }
-    }
-
-    @Check
-    def checkClassImplements(ClassDeclaration clazz) {
-        val interfaceList = clazz.getImplements();
-
-        if (interfaceList != null) {
-            for (String interfacce : interfaceList.getInterfaces()) {
-                if (classes.contains(interfacce)) {
-                    error(interfacce + " is a class.",
-                    clazz,
-                    MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
-                } else if (!interfaces.contains(interfacce)) {
-                    error("The interface " + interfacce + " not declared.",
-                    clazz, MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
-                } else if (implemented.get(clazz.name).contains(interfacce)) {
-                    error("The class " + clazz.name + " already implements interface " + interfacce + ".",
-                    clazz,
-                    MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
-                } else {
-                    implemented.get(clazz.name).add(interfacce);
-                }
-            }
-        }
-    }
-
-    @Check
-    def checkInterfaceDeclaration(InterfaceDeclaration declaration) {
-        if (Collections.frequency(interfaces, declaration.name) > 1) {
-            error("The interface " + declaration.name + " already declared.",
-            declaration,
-            MyAsmPackage.Literals.TYPE_DECLARATION__NAME);
-        }
-        if (declaration.modifiers != null && Collections.frequency(declaration.modifiers, "abstract") > 1) {
-            error("Only one instance abstract modifier is allowed.",
-            declaration,
-            MyAsmPackage.Literals.TYPE_DECLARATION__MODIFIERS);
         }
     }
 
@@ -187,57 +174,33 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                     MyAsmPackage.Literals.INTERFACE_DECLARATION__EXTENDS);
                 } else {
                     extended.get(declaration.name).add(interfacce);
+                    addInheritedMethods(interfacce, declaration.name);
                 }
             }
         }
     }
 
     @Check
-    def checkAttributeDeclaration(TypeDeclaration owner) {
-        var String type;
+    def checkClassImplements(ClassDeclaration clazz) {
+        val interfaceList = clazz.getImplements();
 
-        for (EObject declaration : owner.body.getDeclarations()) {
-            if (declaration instanceof Attribute) {
-                for (VariableDeclarator variable : declaration.getDeclarations()) {
-                    if (attributesN.get(owner.name).contains(variable.facade.name)) {
-                        error("Class attribute " + variable.facade.name + " already declared.",
-                        variable,
-                        MyAsmPackage.Literals.VARIABLE_DECLARATOR__FACADE);
-                    }
-                    if (declaration.type instanceof ObjectType) {
-                        type = (declaration.type as ObjectType).name;
-
-                        if (attributes.get(type) == null) {
-                            error("Attribute type " + type + " unreachable.",
-                            declaration,
-                            MyAsmPackage.Literals.ATTRIBUTE__TYPE);
-                        }
-                    } else {
-                        type = declaration.type.eClass.name;
-                    }
-                    checkAttributeType(owner.name, declaration, type);
-
-                    attributes .get(owner.name).add(declaration);
-                    attributesN.get(owner.name).add(variable.facade.name)
+        if (interfaceList != null) {
+            for (String interfacce : interfaceList.getInterfaces()) {
+                if (classes.contains(interfacce)) {
+                    error(interfacce + " is a class.",
+                    clazz,
+                    MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
+                } else if (!interfaces.contains(interfacce)) {
+                    error("The interface " + interfacce + " not declared.",
+                    clazz, MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
+                } else if (implemented.get(clazz.name).contains(interfacce)) {
+                    error("The class " + clazz.name + " already implements interface " + interfacce + ".",
+                    clazz,
+                    MyAsmPackage.Literals.CLASS_DECLARATION__IMPLEMENTS);
+                } else {
+                    implemented.get(clazz.name).add(interfacce);
+                    addInheritedMethods(interfacce, clazz.name);
                 }
-            }
-        }
-    }
-
-    def checkAttributeType(String owner, Attribute attribute, String expectedType) {
-        for (VariableDeclarator variable : attribute.declarations) {
-            if (variable.definition instanceof Expression) {
-                val result = isCompatibleType(owner, variable.definition as Expression, expectedType) as Boolean;
-                if (result != null && !result) {
-                    error("Fail to derive a compatible type to " + expectedType + ", return type is not compatible.",
-                    variable,
-                    MyAsmPackage.Literals.VARIABLE_DECLARATOR__DEFINITION);
-                } else if (result == null) {
-                    warning("Type expression validation is not available.",
-                    variable,
-                    MyAsmPackage.Literals.VARIABLE_DECLARATOR__DEFINITION);
-                }
-            } else if (variable.definition instanceof ArrayInitializer) {
             }
         }
     }
@@ -250,6 +213,7 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 val modifiers = definition.signature.getModifiers();
 
                 //TODO(diegoadolfo): check method modifiers
+
                 if (definition.body != null && modifiers.contains("abstract")) {
                     error("An abstract method must have an empty body.",
                     definition.signature,
@@ -268,12 +232,116 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 }
                 checkMethodHeader(declaration.name, definition.signature.getHeader());
 
-                if (!(declaration instanceof InterfaceDeclaration) && !modifiers.contains("abstract")) {
-                    checkMethodBody(declaration.name, definition);
+                if (!modifiers.contains("abstract")) {
+                    if (!(declaration instanceof InterfaceDeclaration)) {
+                        checkMethodBody (declaration.name, definition);
+                    } else {
+                        definition.signature.modifiers.add("abstract");
+                    }
                 }
                 methods.get(declaration.name).add(definition);
             }
         }
+    }
+
+    def checkMethodHeader(String owner, MethodDeclarator header) {
+        var List<String> paramsType = new ArrayList<String>();
+
+        for (FormalParameter param : header.getParams()) {
+            if (param.type instanceof ObjectType) {
+                val type = param.type as ObjectType;
+
+                paramsType.add(type.name);
+                if(methods.get(type.name) == null) {
+                    error("Method param type " + type.name + " unreachable.",
+                    param,
+                    MyAsmPackage.Literals.FORMAL_PARAMETER__TYPE);
+                }
+            } else {
+                paramsType.add(param.type.eClass.name);
+            }
+        }
+        val methods = methods.get(owner)
+        .filter[it.signature.header.name.equals(header.name)]
+
+        for (Method method : methods) {
+            val methodParamsType = extractMethodParamsType(method.signature.header)
+
+            if (paramsType.equals(methodParamsType)) {
+                error("Method " + header.name + " already declared.",
+                header,
+                MyAsmPackage.Literals.METHOD_DECLARATOR__NAME);
+            }
+        }
+    }
+
+    def checkMethodBody(String owner, Method method) {
+        val body = method.body as DeclarationBody;
+        checkStatementBlock(owner, body.declarations, new ArrayList<Variable>());
+    }
+
+    def checkStatementBlock(String owner, List<EObject> statements, List<Variable> scope) {
+        var Set<String> varNames  = new HashSet<String>();
+
+        for (EObject statement : statements) {
+            if (statement instanceof Variable) {
+                checkVariableDeclaration(owner, statement, varNames);
+                scope.add(statement);
+            } else if (statement instanceof AssignmentStatement) {
+                checkAssignmentStatement(owner, statement, scope);
+            } else if (statement instanceof Expression) {
+            } else if (statement instanceof SwitchStatement) {
+                checkSwitchStatement    (owner, statement, scope);
+            } else if (statement instanceof ReturnStatement) {
+            } else {
+            }
+        }
+
+    }
+
+    def checkMethodInvacation(String owner, MethodInvocation method) {
+        var List<Method> candidatesMethods = new ArrayList<Method>();
+
+        // Owner class methods
+        candidatesMethods.addAll(methods.get(owner)
+        .filter[it.signature.header.name.equals(method.name)]);
+        // Owner inherited class methods
+        candidatesMethods.addAll(inheritedMethods.get(owner)
+        .filter[it.signature.header.name.equals(method.name)]);
+
+        if (candidatesMethods.isNullOrEmpty()) {
+            error("Unreachable method " + method.name + " in class " + owner + ".",
+            method,
+            MyAsmPackage.Literals.METHOD_INVOCATION__NAME);
+
+            //Method type unreachable
+            return null;
+        }
+        var List<String> params = new ArrayList<String>();
+
+        if (method.params != null) {
+            for (Expression expr : method.params.declarations) {
+                var String result = evaluateType(owner, expr) as String;
+                params.add(result);
+            }
+        }
+        for (Method candidate : candidatesMethods) {
+            val  methodParams = extractMethodParamsType(candidate.signature.header)
+
+            if (params.equals(methodParams)) {
+                if (candidate.signature.type instanceof ObjectType) {
+                    return (candidate.signature.type as ObjectType).name;
+                } else {
+                    return candidate.signature.type.eClass.name;
+                }
+            }
+        }
+        error("Unreachable method " + method.name + " in class " + owner + " with input parameters.",
+        method,
+        MyAsmPackage.Literals.METHOD_INVOCATION__PARAMS);
+
+        //Method type unreachable
+        return null;
     }
 
     @Check
@@ -306,7 +374,6 @@ class MyAsmValidator extends AbstractMyAsmValidator {
             for (String interfacce : implemented.get(clazz.name)) {
                 inheritedMethods.addAll(methods.get(interfacce));
             }
-
             if (!classMethods.containsAll(inheritedMethods)) {
                 error("The class " + clazz.name + " must implement all interfaces methods.",
                 clazz.getImplements(),
@@ -315,45 +382,131 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         }
     }
 
-    def checkMethodHeader(String clazz, MethodDeclarator header) {
-        var List<String> paramsType = new ArrayList<String>();
+    @Check
+    def checkAttributeDeclaration(TypeDeclaration owner) {
+        var String type;
 
-        for (FormalParameter param : header.getParams()) {
-            if (param.type instanceof ObjectType) {
-                val type = param.type as ObjectType;
+        for (EObject block : owner.body.declarations) {
+            if (block instanceof Attribute) {
+                for (VariableDeclarator variable : block.declarations) {
+                    if (attrScope.get(owner.name).contains(variable.facade.name)) {
+                        error("Class attribute " + variable.facade.name + " already declared.",
+                        variable,
+                        MyAsmPackage.Literals.VARIABLE_DECLARATOR__FACADE);
+                    }
+                    if (block.type instanceof ObjectType) {
+                        type = (block.type as ObjectType).name;
 
-                paramsType.add(type.name);
-                if(methods.get(type.name) == null) {
-                    error("Method param type " + type.name + " unreachable.",
-                    param,
-                    MyAsmPackage.Literals.FORMAL_PARAMETER__TYPE);
+                        if (attributes.get(type) == null) {
+                            error("Attribute type " + type + " unreachable.",
+                            block,
+                            MyAsmPackage.Literals.ATTRIBUTE__TYPE);
+                        }
+                    } else {
+                        type = block.type.eClass.name;
+                    }
+                    checkVariableType(owner.name, variable.definition, type);
+
+                    attributes.get(owner.name).add(block);
+                    attrScope .get(owner.name).add(variable.facade.name)
+                }
+            }
+        }
+    }
+
+    def checkVariableType(String owner, VariableInitializer definition, String type) {
+        if (definition instanceof Expression) {
+            var String result = evaluateType(owner, definition) as String;
+            if (result != null && !isCompatibleType(type, result)) {
+                error("Fail to derive a compatible type to " + type + " and " + result + ", types are not compatible.",
+                definition, null, -1);
+            }
+        } else if (definition instanceof ArrayInitializer) {
+        }
+    }
+
+    def checkVariableDeclaration(String owner, Variable variable, Set<String> scope) {
+        var String type;
+
+        for (VariableDeclarator declaration : variable.declarations) {
+            if (scope.contains(declaration.facade.name)) {
+                error("Variable " + declaration.facade.name + " already declared.",
+                declaration,
+                MyAsmPackage.Literals.VARIABLE_DECLARATOR__FACADE);
+            }
+            if (variable.type instanceof ObjectType) {
+                type = (variable.type as ObjectType).name;
+
+                if (attributes.get(type) == null) {
+                    error("Variable type " + type + " unreachable.",
+                    declaration,
+                    MyAsmPackage.Literals.ATTRIBUTE__TYPE);
                 }
             } else {
-                paramsType.add(param.type.eClass.name);
+                type = variable.type.eClass.name;
             }
-        }
-        val methods = methods.get(clazz)
-        .filter[it.signature.header.name.equals(header.name)]
-
-        for (Method method : methods) {
-            val methodParamsType = extractMethodParamsType(method.signature.header)
-
-            if (paramsType.equals(methodParamsType)) {
-                error("Method " + header.name + " already declared.",
-                header,
-                MyAsmPackage.Literals.METHOD_DECLARATOR__NAME);
-            }
+            checkVariableType(owner, declaration.definition, type);
+            scope.add(declaration.facade.name);
         }
     }
 
-    def checkMethodBody(String owner, Method method) {
+    def checkAssignmentStatement(String owner, AssignmentStatement statement, List<Variable> scope) {
+        val varType = deriveVariableTypeFromScope(owner, statement.left, scope);
+
+        if (varType == null) {
+            error("Unreachable variable or attribute " + statement.left + " in class " + owner + ".",
+            statement,
+            MyAsmPackage.Literals.ASSIGNMENT_STATEMENT__LEFT);
+        } else {
+            val expType = evaluateType(owner, statement.right) as String;
+
+            if (expType == null) {
+                error("Expression type out of project scope.",
+                statement.right, null, -1);
+            } else if (!isCompatibleType(varType, expType)) {
+                error("Type mismatch. Expected: " + varType + ". Found: " + expType,
+                statement.right, null, -1);
+            }
+            //TODO(diegoadolfo): check operator support
+        }
     }
 
-    def checkMethodInvacation(String owner, MethodInvocation method, String expectedType) {
-        return null;
+    def checkSwitchStatement(String owner, SwitchStatement statement, List<Variable> scope) {
+        var String switchType = evaluateType(owner, statement.expression) as String;
+
+        println(switchType);
+        if (switchType == null) {
+            error("Expression type out of project scope.",
+            statement.expression, null, -1)
+        } else {
+            if (!switchType.equals("IntType") && !switchType.equals("String") &&
+                    Arrays .asList("LongType", "FloatType", "DoubleType", "BooleanType").contains(switchType)) {
+
+                error("Type mismatch. Expected: IntType or String. Found: " + switchType + ".",
+                statement.expression, null, -1);
+            } else {
+                switchType = deriveVariableTypeFromScope(owner, switchType, scope);
+
+                if (switchType == null) {
+
+                } else if (!switchType.equals("IntType") && !switchType.equals("String")) {
+                    error("Type mismatch. Expected: IntType or String. Found: " + switchType + ".",
+                    statement.expression, null, -1);
+                } else {
+                    for (Expression constant : statement.constants) {
+                        var String  caseType = evaluateType(owner, constant) as String;
+
+                        if(!isCompatibleType(switchType, caseType)) {
+                            error("Type mismatch. Expected: " + switchType + ". Found: " + caseType,
+                            constant, null, -1);
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    def checkNumericExpression(String owner, NumericExpression expr, String expectedType) {
+    def checkNumericExpression(String owner, NumericExpression expr) {
         return null;
     }
 
@@ -383,6 +536,12 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         return classMethods;
     }
 
+    def addInheritedMethods(String src, String dest) {
+        for (Method method : methods.get(src)) {
+
+        }
+    }
+
     def getMethodComparator() {
         return new Comparator<Method>() {
             override compare(Method arg1, Method arg2) {
@@ -403,26 +562,17 @@ class MyAsmValidator extends AbstractMyAsmValidator {
 
     def isCompatibleType(String type1, String type2) {
         switch (type1) {
-            case "IntType"    : {
-                return type2.equals("IntegerLiteral");
-            }
             case "LongType"   : {
-                return Arrays.asList("IntegerLiteral", "LongLiteral")
+                return Arrays.asList("IntType", "LongType")
                 .contains(type2);
             }
             case "FloatType"  : {
-                return Arrays.asList("IntegerLiteral", "LongLiteral", "FloatingLiteral")
+                return Arrays.asList("IntType", "LongType", "FloatType")
                 .contains(type2);
             }
             case "DoubleType" : {
-                return Arrays.asList("IntegerLiteral", "LongLiteral", "FloatingLiteral", "DoubleType")
+                return Arrays.asList("IntType", "LongType", "FloatType", "DoubleType")
                 .contains(type2);
-            }
-            case "BooleanType": {
-                return type2.equals("BooleanLiteral");
-            }
-            case "String"     : {
-                return type2.equals("StringLiteral");
             }
             case type2: {
                 return true;
@@ -433,44 +583,86 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         }
     }
 
-    def isCompatibleType(String owner, Expression expr, String expectedType) {
+    def evaluateType(String owner, Expression expr) {
         if (expr instanceof CastExpression) {
             if (expr.types.isNullOrEmpty()) {
-                var String currType = expr.expression.eClass.name;
+                var String exprClass = expr.expression.eClass.name;
 
-                if (currType.equals("IntegerLiteral") &&
-                        (expr.expression as IntegerLiteral).suffix != null) {
-                    currType = "LongLiteral";
-                } else if (currType.equals("FloatingLiteral")) {
+                if (exprClass.equals("IntegerLiteral")) {
+                    if ((expr.expression as IntegerLiteral).suffix != null) {
+                        return "LongType";
+                    } else {
+                        return "IntType";
+                    }
+                } else if (exprClass.equals("FloatingLiteral")) {
                     val suffix = (expr.expression as FloatingIntLiteral).suffix;
 
-                    if (suffix  != null && (suffix.equals("d") || suffix.equals("D"))) {
-                        currType = "DoubleLiteral";
+                    if(suffix != null && (suffix.equals("d") || suffix.equals("D"))) {
+                        return "DoubleType";
+                    } else {
+                        return "FloatType";
                     }
-                } else if (currType.equals("ClassInstanceCreationExpression")) {
-                    currType = ((expr.expression as ClassInstanceCreationExpression).type as ObjectType).name;
-                } else if (currType.equals("ArrayCreationExpression")) {
+                } else if (exprClass.equals("BooleanLiteral")) {
+                    return "BooleanType";
+                } else if (exprClass.equals("StringLiteral")) {
+                    return "String";
+                } else if (exprClass.equals("ObjectLiteral")) {
+                    return (expr.expression as ObjectLiteral).value;
+                } else if (exprClass.equals("ClassInstanceCreationExpression")) {
+                    return ((expr.expression as ClassInstanceCreationExpression).type as ObjectType).name;
+                } else if (exprClass.equals("MethodInvocation")) {
+                    return checkMethodInvacation(owner, expr.expression as MethodInvocation);
+                } else {
+                    //Expression out of spoce
                     return null;
-                } else if (currType.equals("MethodInvocation")) {
-                    return checkMethodInvacation (owner, expr.expression as MethodInvocation, expectedType);
                 }
-                return new Boolean(isCompatibleType(expectedType, currType));
             } else {
                 //Expression out of spoce
                 return null;
             }
         } else if (expr instanceof LogicalExpression || expr instanceof TestingExpression) {
-            if (!expectedType.equals("BooleanType")) {
-                return new Boolean(false);
-            } else {
-                return new Boolean(true );
-            }
+                return "BooleanType";
         } else if (expr instanceof NumericExpression) {
-            return checkNumericExpression(owner, expr, expectedType);
+            return checkNumericExpression(owner, expr);
         } else {
             //Expression out of spoce
             return null;
         }
     }
-}
 
+    def deriveVariableTypeFromScope(String owner, String varName) {
+        var String varType;
+
+        for (Attribute variable : attributes.get(owner)) {
+            if (variable.type instanceof ObjectType)
+                varType = (variable.type as ObjectType).name
+            else
+                varType = variable.type.eClass.name;
+
+            for (VariableDeclarator declaration  : variable.declarations) {
+                if (varName.equals(declaration.facade.name)) {
+                    return varType;
+                }
+            }
+        }
+        return null;
+    }
+
+    def deriveVariableTypeFromScope(String owner, String varName, List<Variable> scope) {
+        var String varType;
+
+        for (Variable variable : scope) {
+             if (variable.type instanceof ObjectType)
+                 varType = (variable.type as ObjectType).name
+             else
+                 varType = variable.type.eClass.name;
+
+             for (VariableDeclarator declaration  : variable.declarations) {
+                if (varName.equals(declaration.facade.name)) {
+                    return varType;
+                }
+            }
+        }
+        return deriveVariableTypeFromScope(owner, varName);
+    }
+}

@@ -311,12 +311,16 @@ DoStatement:
 ;
 
 ForStatement:
-    FOR "(" initExpr=ForInit? ";" condition?=Expression? ";" updateExpr=Expression? ")"
+    FOR "(" initExpr=ForInit? ";" condition?=Expression? ";" updateExpr=ForUpdate? ")"
     statement=Statement
 ;
 
 ForInit:
     Expression | LocalVariableDeclaration
+;
+
+ForUpdate:
+    Expression | AssignmentStatement
 ;
 
 AssignmentStatement:
@@ -444,16 +448,16 @@ ParenthesisExpression:
 ;
 
 MethodInvocation:
-    method=MethodName   "(" args+=ArgumentList? ")"
+    name=MethodName "(" params=ArgumentList? ")"
 ;
 
 ClassInstanceCreationExpression:
-    NEW type=ObjectType "(" args+=ArgumentList? ")"
+    NEW type=ObjectType "(" params=ArgumentList? ")"
 ;
 
 ArrayCreationExpression:
     NEW type=TypeSpecifier
-    ( => "[" dimensions+=Expression "]" )+ layers+=( "[]" )*
+    ( => "[" indexes+=Expression "]" )+ layers+=( "[]" )*
 ;
 
 // ===============================================
