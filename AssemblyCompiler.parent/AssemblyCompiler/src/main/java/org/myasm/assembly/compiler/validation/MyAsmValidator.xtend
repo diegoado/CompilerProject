@@ -646,6 +646,34 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         return "!expr";
     }
 
+    def checkLogicExpression(String owner, LogicalExpression expr, List<Variable> scope) {
+        var String exprType;
+        var String lType; var String rType;
+
+        if (expr.left != null && expr.right != null) {
+            lType  = evaluateExpressionTypeSide(owner, expr.left, scope);
+            rType  = evaluateExpressionTypeSide(owner, expr.right, scope);
+
+            if (lType != null && !lType.equals("!method") && !lType.equals("!expr") &&
+                    rType != null && !rType.equals("!method") && !rType.equals("!expr")) {
+
+                if (!isCompatibleType(lType, rType) && !isCompatibleType(rType, lType)) {
+                    error("Type mismatch. The types of expression operands are incompatible.",
+                    expr, null, -1);
+                }
+                exprType = if (lType.equals(rType)) lType else superType(lType, rType);
+
+                if (exprType != "BooleanType") {
+                    error("Type mismatch. Expected: A boolean type. Found: " + exprType + ".",
+                    expr, null, -1);
+                } else {
+                    return exprType;
+                }
+            }
+        }
+        return "!expr";
+    }
+
     def evaluateExpressionTypeSide(String owner, Expression expr, List<Variable> scope) {
         var String exprType = evaluateType(owner, expr, scope) as String;
 
@@ -803,8 +831,10 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 //Expression out of spoce
                 return null;
             }
-        } else if (expr instanceof LogicalExpression || expr instanceof TestingExpression) {
+        } else if (expr instanceof LogicalExpression) {
             //TODO(diegoadolfo): create check to validate expression members
+            return checkLogicExpression(owner, expr, scope);
+        } else if (expr instanceof TestingExpression) {
             return "BooleanType";
         } else if (expr instanceof NumericExpression) {
             return checkNumericExpression(owner, expr, scope);
