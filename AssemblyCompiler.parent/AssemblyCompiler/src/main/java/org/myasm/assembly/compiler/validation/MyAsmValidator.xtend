@@ -75,22 +75,27 @@ class MyAsmValidator extends AbstractMyAsmValidator {
 
         addStringType();
         for (TypeDeclaration declaration : program.getDeclarations()) {
-            if (declaration instanceof ClassDeclaration) {
-                classes.add(declaration.name);
-                implemented.put(declaration.name, new HashSet<String>());
-            } else if (declaration instanceof InterfaceDeclaration) {
-                interfaces .add(declaration.name);
-            }
-            methods   .put(declaration.name, new ArrayList<Method>());
-            attributes.put(declaration.name, new ArrayList<Attribute>());
+            extended        .put(declaration.name, new HashSet<String>());
             inheritedMethods.put(declaration.name, new TreeSet<Method>(getMethodComparator()));
 
-            extended .put(declaration.name, new HashSet<String>());
-            attrScope.put(declaration.name, new HashSet<String>());
+            methods   .put(declaration.name, new ArrayList<Method>());
+            attributes.put(declaration.name, new ArrayList<Attribute>());
+
+            attrScope .put(declaration.name, new HashSet<String>());
+
+            if (declaration instanceof ClassDeclaration) {
+                classes    .add(declaration.name);
+                implemented.put(declaration.name, new HashSet<String>());
+                checkClassDeclaration(declaration);
+            } else if (declaration instanceof InterfaceDeclaration) {
+                interfaces.add(declaration.name);
+                checkInterfaceDeclaration(declaration);
+            }
+            checkMethodDeclaration   (declaration);
+            checkAttributeDeclaration(declaration);
         }
     }
 
-    @Check
     def checkClassDeclaration(ClassDeclaration clazz) {
         if (Collections.frequency(classes, clazz.name) > 1) {
             error("The class " + clazz.name + " already declared.",
@@ -112,9 +117,11 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 finalCls.add(clazz.name);
             }
         }
+        checkClassExtends    (clazz);
+        checkClassImplements (clazz);
+        checkClassInheritance(clazz)
     }
 
-    @Check
     def checkInterfaceDeclaration(InterfaceDeclaration declaration) {
         if (Collections.frequency(interfaces, declaration.name) > 1) {
             error("The interface " + declaration.name + " already declared.",
@@ -126,9 +133,9 @@ class MyAsmValidator extends AbstractMyAsmValidator {
             declaration,
             MyAsmPackage.Literals.TYPE_DECLARATION__MODIFIERS);
         }
+        checkInterfaceExtends(declaration);
     }
 
-    @Check
     def checkMethodDeclaration(TypeDeclaration declaration) {
         for (EObject definition : declaration.body.getDeclarations()) {
             if (definition instanceof Method) {
@@ -173,7 +180,6 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         }
     }
 
-    @Check
     def checkAttributeDeclaration(TypeDeclaration owner) {
         var String type;
 
@@ -205,7 +211,6 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         }
     }
 
-    @Check
     def checkClassExtends(ClassDeclaration clazz) {
         if (clazz.getExtends() != null) {
             val superClass = clazz.getExtends().name;
@@ -228,7 +233,6 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         }
     }
 
-    @Check
     def checkInterfaceExtends(InterfaceDeclaration declaration) {
         val interfaceList = declaration.getExtends()
 
@@ -257,7 +261,6 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         }
     }
 
-    @Check
     def checkClassImplements(ClassDeclaration clazz) {
         val interfaceList = clazz.getImplements();
 
@@ -282,7 +285,6 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         }
     }
 
-    @Check
     //TODO(diegoadolfo): this check validate only immediate inheritance
     def checkClassInheritance(ClassDeclaration clazz) {
         if (clazz.getExtends() != null && finalCls .contains(clazz.getExtends().name)) {
@@ -401,11 +403,11 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         return null;
     }
 
-    def checkVariableDeclaration(String owner, Variable variable, Set<String> scope) {
+    def checkVariableDeclaration(String owner, Variable variable, Set<String> varNames, List<Variable> scope) {
         var String type;
 
         for (VariableDeclarator declaration : variable.declarations) {
-            if (scope.contains(declaration.facade.name)) {
+            if (varNames.contains(declaration.facade.name)) {
                 error("Variable " + declaration.facade.name + " already declared.",
                 declaration,
                 MyAsmPackage.Literals.VARIABLE_DECLARATOR__FACADE);
@@ -421,17 +423,38 @@ class MyAsmValidator extends AbstractMyAsmValidator {
             } else {
                 type = variable.type.eClass.name;
             }
-            checkVariableType(owner, declaration.definition, type);
-            scope.add(declaration.facade.name);
+            checkVariableType(owner, declaration.definition, type, scope);
+            varNames.add(declaration.facade.name);
         }
     }
 
     def checkVariableType(String owner, VariableInitializer definition, String type) {
         if (definition instanceof Expression) {
             var String result = evaluateType(owner, definition) as String;
-            if (result != null && !isCompatibleType(type, result)) {
+
+            if (result != null && !result.contains("Type") && attributes.get(result) == null) {
+                result  = deriveVariableTypeFromScope(owner, result);
+            }
+            if (result == null) {
+                error("Variable not declared in spoce of class " + owner + ".",
+                definition, null, -1);
+            } else if (!isCompatibleType(type, result)) {
                 error("Fail to derive a compatible type to " + type + " and " + result + ", types are not compatible.",
                 definition, null, -1);
+            }
+        } else if (definition instanceof ArrayInitializer) {
+        }
+    }
+
+    def checkVariableType(String owner, VariableInitializer definition, String type, List<Variable> scope) {
+        if (definition instanceof Expression) {
+            var String result = evaluateType(owner, definition) as String;
+
+            if (result != null && !result.contains("Type") && attributes.get(result) == null) {
+                result  = deriveVariableTypeFromScope(owner, result, scope);
+            }
+            if (result == null) {
+                checkVariableType(owner, definition, type);
             }
         } else if (definition instanceof ArrayInitializer) {
         }
@@ -442,7 +465,7 @@ class MyAsmValidator extends AbstractMyAsmValidator {
 
         for (EObject statement : statements) {
             if (statement instanceof Variable) {
-                checkVariableDeclaration(owner, statement, varNames);
+                checkVariableDeclaration(owner, statement, varNames, scope);
                 scope.add(statement);
             } else if (statement instanceof AssignmentStatement) {
                 checkAssignmentStatement(owner, statement, scope);
@@ -471,7 +494,7 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 expType = deriveVariableTypeFromScope(owner, expType, scope);
             }
             if (expType == null) {
-                error("Unreachable variable type in method spoce of class " + owner + ".",
+                error("Variable not declared in method spoce of class " + owner + ".",
                 statement.right, null, -1);
             } else if (!isCompatibleType(varType, expType)) {
                 error("Type mismatch. Expected: " + varType + ". Found: " + expType,
@@ -512,7 +535,7 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                             caseType = deriveVariableTypeFromScope(owner, caseType, scope);
                         }
                         if (caseType == null) {
-                            error("Unreachable variable type in method spoce of class " + owner + ".",
+                            error("Variable not declared in method spoce of class " + owner + ".",
                             constant, null, -1);
                         } else if(!switchType.equals(caseType)) {
                             error("Type mismatch. Expected: " + switchType + ". Found: " + caseType,
@@ -555,8 +578,18 @@ class MyAsmValidator extends AbstractMyAsmValidator {
     }
 
     def addInheritedMethods(String src, String dest) {
-        for (Method method : methods.get(src)) {
+        val cmp = getMethodComparator()
 
+        for (Method method : methods.get(src)) {
+            if (inheritedMethods.get(dest).contains(method)) {
+                val result = inheritedMethods.get(dest)
+                .removeIf[cmp.compare(it, method) == 0 && it.signature.modifiers.contains("abstract")]
+                if (result) {
+                    inheritedMethods.get(dest).add(method);
+                }
+            } else {
+                inheritedMethods.get(dest).add(method);
+            }
         }
     }
 
