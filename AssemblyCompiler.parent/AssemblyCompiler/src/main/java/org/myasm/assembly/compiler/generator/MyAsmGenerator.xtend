@@ -29,6 +29,8 @@ import org.myasm.assembly.compiler.myAsm.PrimaryExpression
 import org.myasm.assembly.compiler.myAsm.FormalParameter
 import java.util.List
 import java.util.ArrayList
+import org.myasm.assembly.compiler.myAsm.MethodHeader
+import org.myasm.assembly.compiler.myAsm.VoidType
 
 /**
  * Generates code from your model files on save.
@@ -37,6 +39,7 @@ import java.util.ArrayList
  */
 class MyAsmGenerator extends AbstractGenerator {
     private HashMap<String, List<String>> methods_parans;
+    private HashMap<String, Boolean> methods_return;
     Resource resource;
     private int stringCounter = 0;
 
@@ -44,6 +47,7 @@ class MyAsmGenerator extends AbstractGenerator {
         this.resource = resource;
         for (e : resource.allContents.toIterable.filter(ClassDeclaration)) {
         	methods_parans = new HashMap<String, List<String>>();
+        	methods_return = new HashMap<String, Boolean>();
             var String nomeDoArquivo = e.name + ".asm";
             fsa.generateFile(nomeDoArquivo, e.compile());
         }
@@ -243,6 +247,10 @@ class MyAsmGenerator extends AbstractGenerator {
     def evaluateMethodInvocation(MethodInvocation invocation){
  		var String ultima_linha= "call "+ invocation.name + ":"; 
  		var List<Expression> params = invocation.params.declarations;
+ 		var String return_method =  "";
+ 		if(methods_return.get(invocation.name)){
+ 			return_method += "\nST " + "return_"+invocation.name + ",R0";
+ 		}
  		var String code = "";
  		var int i = 0;
  		for(Expression exp : params){
@@ -250,7 +258,7 @@ class MyAsmGenerator extends AbstractGenerator {
  			code+= "\nST " + methods_parans.get(invocation.name).get(i) + ",R0\n";
  			i++;
  		}
- 		return ";Chamando " + invocation.name + "\n"+ code + "call "+ invocation.name + ":";  
+ 		return ";Chamando " + invocation.name + "\n"+ code + ultima_linha;//+ return_method; 
   	}
      
     def methodMap(Method method){
@@ -259,6 +267,11 @@ class MyAsmGenerator extends AbstractGenerator {
     		list_parans.add(parameter.variable.name);
     	}
     	methods_parans.put(method.signature.header.name,list_parans);
+    	var MethodHeader header = method.signature.header as MethodHeader;
+    	if(header.type instanceof VoidType){
+    		methods_return.put(method.signature.header.name,false);
+    	}else 
+    		methods_return.put(method.signature.header.name,true);
     }
      
      
