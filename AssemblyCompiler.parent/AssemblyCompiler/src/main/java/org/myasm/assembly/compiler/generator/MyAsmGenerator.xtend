@@ -22,15 +22,14 @@ import org.myasm.assembly.compiler.myAsm.Variable
 import org.myasm.assembly.compiler.myAsm.Attribute
 import org.eclipse.emf.ecore.EObject
 import org.myasm.assembly.compiler.myAsm.AssignmentStatement
-import org.myasm.assembly.compiler.services.MyAsmGrammarAccess.ExpressionNameElements
 import org.myasm.assembly.compiler.myAsm.MethodInvocation
-import org.myasm.assembly.compiler.myAsm.Statement
-import org.myasm.assembly.compiler.myAsm.PrimaryExpression
 import org.myasm.assembly.compiler.myAsm.FormalParameter
 import java.util.List
 import java.util.ArrayList
 import org.myasm.assembly.compiler.myAsm.MethodHeader
 import org.myasm.assembly.compiler.myAsm.VoidType
+import java.beans.Statement
+import org.myasm.assembly.compiler.myAsm.ReturnStatement
 
 /**
  * Generates code from your model files on save.
@@ -59,9 +58,9 @@ class MyAsmGenerator extends AbstractGenerator {
 		«classDeclaration.compileAttribute()»
 		; Codigo
 		«classDeclaration.compileMethod()»
-    	; Main
-    	«//JAVA MAIN
-   		 »
+    	; Main 
+    	_start:
+    	«classDeclaration.compileMain()»
     	ret; Fim do programa
 	'''
 	def compileAttribute(ClassDeclaration classDeclaration) '''
@@ -125,6 +124,9 @@ class MyAsmGenerator extends AbstractGenerator {
                 return "LD R"+(counter)+"," + esquerda.value;
         	}
         	else{
+        	if(expression.expression instanceof MethodInvocation){
+        			return "return";
+        	}
             var Literal esquerda = expression.expression as Literal;
             if (esquerda instanceof IntegerLiteral) {
                 return "LD R"+(counter)+"," + esquerda.value;
@@ -225,6 +227,7 @@ class MyAsmGenerator extends AbstractGenerator {
     '''
     
     def compileMethodVariable(Method method)'''
+    	«IF method.signature.header.name != "main"»
     	;Procedure «method.signature.header.name»
     	«method.signature.header.name»:
     	«var DeclarationBody methodBody = method.body as DeclarationBody»
@@ -238,6 +241,7 @@ class MyAsmGenerator extends AbstractGenerator {
     	    	«ENDFOR»
     	    «ENDIF»
     	«ENDFOR»
+    	«ENDIF»
     '''
      
     def compileAssigment(AssignmentStatement assignmentStatement )'''
@@ -246,11 +250,14 @@ class MyAsmGenerator extends AbstractGenerator {
     '''
     def evaluateMethodInvocation(MethodInvocation invocation){
  		var String ultima_linha= "call "+ invocation.name + ":"; 
- 		var List<Expression> params = invocation.params.declarations;
- 		var String return_method =  "";
- 		if(methods_return.get(invocation.name)){
- 			return_method += "\nST " + "return_"+invocation.name + ",R0";
+ 		var List<Expression> params = new ArrayList<Expression>(); 
+ 		if(invocation.params != null){
+ 			params = invocation.params.declarations;
  		}
+// 		var String return_method =  "";
+// 		if(methods_return.get(invocation.name)){
+// 			return_method += "\nST " + "return_"+invocation.name + ",R0";
+// 		}
  		var String code = "";
  		var int i = 0;
  		for(Expression exp : params){
@@ -267,12 +274,43 @@ class MyAsmGenerator extends AbstractGenerator {
     		list_parans.add(parameter.variable.name);
     	}
     	methods_parans.put(method.signature.header.name,list_parans);
-    	var MethodHeader header = method.signature.header as MethodHeader;
-    	if(header.type instanceof VoidType){
+    	if(method.signature.type  instanceof VoidType){
     		methods_return.put(method.signature.header.name,false);
     	}else 
     		methods_return.put(method.signature.header.name,true);
+    	println(method.body);
+		return "";
     }
      
-     
+    // Main
+    
+     def compileMain(ClassDeclaration classDeclaration) '''
+    	«var DeclarationBody body  = classDeclaration.body as DeclarationBody»
+    		«FOR EObject element : body.declarations»
+    		    	«IF element instanceof Method»
+    		    	«element.methodMap»
+    		    	«ENDIF»
+    		 «ENDFOR»
+    		«FOR EObject element : body.declarations»
+    			«IF element instanceof Method»
+    				«element.compileMainVariable»
+    			«ENDIF»
+    		«ENDFOR»
+     '''
+    def compileMainVariable(Method method)'''
+    	«IF method.signature.header.name == "main"»
+    	«method.signature.header.name»:
+    	«var DeclarationBody methodBody = method.body as DeclarationBody»
+    	«FOR EObject variable : methodBody.declarations»
+    		«IF variable instanceof CastExpression»
+    			«evaluateMethodInvocation(variable.expression as MethodInvocation)»
+    		«ENDIF»
+    	    «IF variable instanceof Variable»
+    	    	«FOR VariableDeclarator variableDeclarator : variable.declarations»
+    	    		«variableDeclarator.geraAssemblyVariableDeclarator»
+    	    	«ENDFOR»
+    	    «ENDIF»
+    	«ENDFOR»
+    	«ENDIF»
+    '''
 }
