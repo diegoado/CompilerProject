@@ -26,6 +26,9 @@ import org.myasm.assembly.compiler.services.MyAsmGrammarAccess.ExpressionNameEle
 import org.myasm.assembly.compiler.myAsm.MethodInvocation
 import org.myasm.assembly.compiler.myAsm.Statement
 import org.myasm.assembly.compiler.myAsm.PrimaryExpression
+import org.myasm.assembly.compiler.myAsm.FormalParameter
+import java.util.List
+import java.util.ArrayList
 
 /**
  * Generates code from your model files on save.
@@ -33,13 +36,14 @@ import org.myasm.assembly.compiler.myAsm.PrimaryExpression
  * See https://www.eclipse.org/Xtext/documentation/303_runtime_concepts.html#code-generation
  */
 class MyAsmGenerator extends AbstractGenerator {
-    private HashMap<String, String> atributos = new HashMap<String, String>();
+    private HashMap<String, List<String>> methods_parans;
     Resource resource;
     private int stringCounter = 0;
 
     override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
         this.resource = resource;
         for (e : resource.allContents.toIterable.filter(ClassDeclaration)) {
+        	methods_parans = new HashMap<String, List<String>>();
             var String nomeDoArquivo = e.name + ".asm";
             fsa.generateFile(nomeDoArquivo, e.compile());
         }
@@ -132,9 +136,6 @@ class MyAsmGenerator extends AbstractGenerator {
             }
 			}
         }
-        if (expression instanceof PrimaryExpression){
-        	println("prestou");
-        }
     }
     def testaBooleanLiteral(BooleanLiteral literal, BooleanLiteral literal2, String op) {
         if (op.equals("==")) {
@@ -208,6 +209,11 @@ class MyAsmGenerator extends AbstractGenerator {
     def compileMethod(ClassDeclaration classDeclaration) '''
     	«var DeclarationBody body  = classDeclaration.body as DeclarationBody»
     		«FOR EObject element : body.declarations»
+    		    	«IF element instanceof Method»
+    		    		«element.methodMap»
+    		    	«ENDIF»
+    		 «ENDFOR»
+    		«FOR EObject element : body.declarations»
     			«IF element instanceof Method»
     				«element.compileMethodVariable»
     			«ENDIF»
@@ -219,9 +225,8 @@ class MyAsmGenerator extends AbstractGenerator {
     	«method.signature.header.name»:
     	«var DeclarationBody methodBody = method.body as DeclarationBody»
     	«FOR EObject variable : methodBody.declarations»
-    		«IF variable instanceof Statement»
-    			«var AssignmentStatement assignment = variable as AssignmentStatement»
-    			«assignment.compileAssigment»
+    		«IF variable instanceof CastExpression»
+    			«evaluateMethodInvocation(variable.expression as MethodInvocation)»
     		«ENDIF»
     	    «IF variable instanceof Variable»
     	    	«FOR VariableDeclarator variableDeclarator : variable.declarations»
@@ -234,9 +239,27 @@ class MyAsmGenerator extends AbstractGenerator {
     def compileAssigment(AssignmentStatement assignmentStatement )'''
      	«var Expression expression = assignmentStatement.right as Expression»
      	«expression.evaluateExpression»
-     	ST «assignmentStatement.left»,R0
     '''
+    def evaluateMethodInvocation(MethodInvocation invocation){
+ 		var String ultima_linha= "call "+ invocation.name + ":"; 
+ 		var List<Expression> params = invocation.params.declarations;
+ 		var String code = "";
+ 		var int i = 0;
+ 		for(Expression exp : params){
+ 			code+= evaluateExpression(exp);
+ 			code+= "\nST " + methods_parans.get(invocation.name).get(i) + ",R0\n";
+ 			i++;
+ 		}
+ 		return ";Chamando " + invocation.name + "\n"+ code + "call "+ invocation.name + ":";  
+  	}
      
+    def methodMap(Method method){
+    	var ArrayList<String> list_parans = new ArrayList<String>();
+    	for( FormalParameter parameter : method.signature.header.params){
+    		list_parans.add(parameter.variable.name);
+    	}
+    	methods_parans.put(method.signature.header.name,list_parans);
+    }
      
      
 }
