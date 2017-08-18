@@ -358,9 +358,7 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         val returns = checkStatementBlock(owner, body.declarations, new ArrayList<Variable>());
 
         var String  resultType;
-        var boolean allowNull = false;
         if (method.signature.type instanceof ObjectType) {
-            allowNull  = true;
             resultType = (method.signature.type as ObjectType).name;
         } else {
             resultType = method.signature.type.eClass.name;
@@ -369,6 +367,19 @@ class MyAsmValidator extends AbstractMyAsmValidator {
             error("Cannot return a value from a method with void result type.",
             method.signature,
             MyAsmPackage.Literals.METHOD_HEADER__TYPE)
+        } else if (returns.isEmpty() && resultType != "VoidType") {
+            error("Return a value expected from a method with " + resultType + " as result type.",
+            method.signature,
+            MyAsmPackage.Literals.METHOD_HEADER__TYPE)
+        } else {
+            for (String type : returns) {
+                if (!isCompatibleType(resultType, type)) {
+                    error("Type mismatch. Expected: " + resultType + ". Found: " + type + ".",
+                    method.signature,
+                    MyAsmPackage.Literals.METHOD_HEADER__TYPE)
+                    return;
+                }
+            }
         }
     }
 
@@ -449,11 +460,13 @@ class MyAsmValidator extends AbstractMyAsmValidator {
             if (result != null && !result.equals("!method") && !result.equals("!expr") &&
                     !result.contains("Type") && attributes.get(result) == null) {
                 result  = deriveVariableTypeFromScope(owner, result);
+
+                if (result == null) {
+                    error("Variable not declared in spoce of class " + owner + ".",
+                    definition, null, -1);
+                }
             }
-            if (result == null) {
-                error("Variable not declared in spoce of class " + owner + ".",
-                definition, null, -1);
-            } else if (!result.equals("!method") && !result.equals("!expr") &&
+            if (result != null && !result.equals("!method") && !result.equals("!expr") &&
                     !isCompatibleType(type, result)) {
                 error("Fail to derive a compatible type to " + type + " and " + result + ", types are not compatible.",
                 definition, null, -1);
@@ -469,11 +482,13 @@ class MyAsmValidator extends AbstractMyAsmValidator {
             if (result != null && !result.equals("!method") && !result.equals("!expr") &&
                     !result.contains("Type") && attributes.get(result) == null) {
                 result  = deriveVariableTypeFromScope(owner, result, scope);
+
+                if (result == null) {
+                    error("Variable not declared in spoce of class " + owner + ".",
+                    definition, null, -1);
+                }
             }
-            if (result == null) {
-                error("Variable not declared in spoce of class " + owner + ".",
-                definition, null, -1);
-            } else if (!result.equals("!method") && !result.equals("!expr") &&
+            if (result != null && !result.equals("!method") && !result.equals("!expr") &&
                     !isCompatibleType(type, result)) {
                 error("Fail to derive a compatible type to " + type + " and " + result + ", types are not compatible.",
                 definition, null, -1);
@@ -497,7 +512,7 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 checkSwitchStatement    (owner, statement, scope);
             } else if (statement instanceof ReturnStatement) {
                 val result  = checkReturnStatement(owner, statement, scope);
-                if (result != null && !result.equals("!method")) {
+                if (result != null && !result.equals("!method") && !result.equals("!expr")) {
                     returns.add(result);
                 }
             } else {
@@ -519,11 +534,13 @@ class MyAsmValidator extends AbstractMyAsmValidator {
             if (expType != null && !expType.equals("!method") && !expType.equals("!expr") &&
                     !expType.contains("Type") && attributes.get(expType) == null) {
                 expType = deriveVariableTypeFromScope(owner, expType, scope);
+
+                if (expType == null) {
+                    error("Variable not declared in method spoce of class " + owner + ".",
+                    statement.right, null, -1);
+                }
             }
-            if (expType == null) {
-                error("Variable not declared in method spoce of class " + owner + ".",
-                statement.right, null, -1);
-            } else if (!expType.equals("!method") && !expType.equals("!expr") &&
+            if (expType != null && !expType.equals("!method") && !expType.equals("!expr") &&
                     !isCompatibleType(varType, expType)) {
                 error("Type mismatch. Expected: " + varType + ". Found: " + expType,
                 statement.right, null, -1);
@@ -535,10 +552,7 @@ class MyAsmValidator extends AbstractMyAsmValidator {
     def checkSwitchStatement(String owner, SwitchStatement statement, List<Variable> scope) {
         var String switchType = evaluateType(owner, statement.expression, scope);
 
-        if (switchType == null) {
-            error("Expression type out of project scope.",
-            statement.expression, null, -1)
-        } else {
+        if (switchType != null) {
             if ((!switchType.equals("IntType") && !switchType.equals("String") &&
                     Arrays .asList("LongType", "FloatType", "DoubleType", "BooleanType", "NullType")
                     .contains(switchType)) || methods.get(switchType) != null) {
@@ -562,11 +576,13 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                         if (caseType != null && !caseType.contains("Type") && !caseType.equals("!method") &&
                                 !caseType.equals("!expr") && methods.get(caseType) == null) {
                             caseType = deriveVariableTypeFromScope(owner, caseType, scope);
+
+                            if (caseType == null) {
+                                error("Variable not declared in method spoce of class " + owner + ".",
+                                constant, null, -1);
+                            }
                         }
-                        if (caseType == null) {
-                            error("Variable not declared in method spoce of class " + owner + ".",
-                            constant, null, -1);
-                        } else if (!caseType.equals("!method") && !caseType.equals("!expr") &&
+                        if (caseType !=null && !caseType.equals("!method") && !caseType.equals("!expr") &&
                                 !switchType.equals(caseType)) {
                             error("Type mismatch. Expected: " + switchType + ". Found: " + caseType,
                             constant, null, -1);
@@ -583,13 +599,14 @@ class MyAsmValidator extends AbstractMyAsmValidator {
         }
         var String exprType = evaluateType(owner, statement.expression, scope);
 
-        if (exprType != null && !exprType.equals("!method") &&
+        if (exprType != null && !exprType.equals("!method") && !exprType.equals("!expr") &&
                 !exprType.contains("Type") && attributes.get(exprType) == null) {
             exprType  = deriveVariableTypeFromScope(owner, exprType, scope);
-        }
-        if (exprType == null) {
-            error("Variable not declared in spoce of class " + owner + ".",
-            statement.expression, null, -1);
+
+            if (exprType == null) {
+                error("Variable not declared in spoce of class " + owner + ".",
+                statement.expression, null, -1);
+            }
         }
         return exprType;
     }
@@ -636,6 +653,7 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 !exprType.contains("Type") && attributes.get(exprType) == null) {
 
             exprType = deriveVariableTypeFromScope(owner, exprType, scope);
+
             if (exprType == null) {
                 error("Variable not declared in method spoce of class " + owner + ".",
                 expr, null, -1);
@@ -786,7 +804,8 @@ class MyAsmValidator extends AbstractMyAsmValidator {
                 return null;
             }
         } else if (expr instanceof LogicalExpression || expr instanceof TestingExpression) {
-                return "BooleanType";
+            //TODO(diegoadolfo): create check to validate expression members
+            return "BooleanType";
         } else if (expr instanceof NumericExpression) {
             return checkNumericExpression(owner, expr, scope);
         } else {
